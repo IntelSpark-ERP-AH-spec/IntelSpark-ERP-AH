@@ -87,6 +87,12 @@ function dataOwnerId(user, key = '') {
   return primaryAdmin?.id || user.id;
 }
 
+function legacyAdminDocumentKey(ownerId, key) {
+  if (key === 'saved_documents_admin_shared') return `saved_documents_${ownerId}`;
+  if (key === 'user_history_admin_shared') return `user_history_${ownerId}`;
+  return null;
+}
+
 // ── Legacy : save / load complets ────────────────────────────────────────────
 router.post('/save', async (req, res) => {
   try {
@@ -117,6 +123,7 @@ router.get('/load', async (req, res) => {
     const ownerId = dataOwnerId(req.user);
     const map = await getUserMap(ownerId);
     for (const row of dbQuery('SELECT key, value_json FROM user_documents WHERE user_id = ?', [ownerId])) {
+      if (row.key.startsWith('is_brands_chunk_')) continue;
       map[row.key] = parseStoredJson(row.value_json);
     }
     res.json(map);
@@ -133,6 +140,14 @@ router.get('/doc/:key', async (req, res) => {
     const ownerId = dataOwnerId(req.user, req.params.key);
     const stored = getDocument(ownerId, req.params.key);
     if (stored !== undefined) return res.json(stored);
+    if (req.user.role === 'admin') {
+      const previousKey = legacyAdminDocumentKey(ownerId, req.params.key);
+      const previousValue = previousKey ? getDocument(ownerId, previousKey) : undefined;
+      if (previousValue !== undefined) {
+        setDocument(ownerId, req.params.key, previousValue);
+        return res.json(previousValue);
+      }
+    }
     const legacyMap = await getUserMap(ownerId);
     const legacyValue = legacyMap[req.params.key];
     if (legacyValue !== undefined) setDocument(ownerId, req.params.key, legacyValue);

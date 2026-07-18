@@ -1534,6 +1534,10 @@ const COMPANY_SYNC_KEYS = new Set([
   'is_company_email', 'is_footer', 'is_logo', 'is_brands',
 ]);
 
+const ADMIN_SHARED_SEED_KEYS = [
+  'is_logo', 'is_brands', 'is_footer', 'is_company_name', 'is_catalog',
+];
+
 const hasMeaningfulSyncValue = value => {
   if (value === null || value === undefined) return false;
   if (Array.isArray(value)) return value.length > 0;
@@ -2223,27 +2227,12 @@ export default function App() {
   const setSavedDocs = useCallback((updater) => {
     audit.setSavedDocs(updater);
   }, [audit]);
-  const historyDoc = useUserDoc(`user_history_${user?.id || 'anonymous'}`, []);
+  const historyNamespace = user?.role === 'admin' ? 'admin_shared' : (user?.id || 'anonymous');
+  const historyDoc = useUserDoc(`user_history_${historyNamespace}`, []);
   const documentHistory = historyDoc.data || [];
   const setDocumentHistory = historyDoc.setData;
   const [savedSearch, setSavedSearch] = useState('');
   const [isReturning, setIsReturning] = useState(false);
-  useEffect(() => {
-    if (!user?.id) return undefined;
-    let cancelled = false;
-    const refreshSharedStock = () => api.getProduits('').then(products => {
-      if (!cancelled && Array.isArray(products)) setCatalog(products.map(sharedProductToCatalog));
-    }).catch(() => {});
-    refreshSharedStock();
-    const interval = window.setInterval(refreshSharedStock, 5000);
-    window.addEventListener('focus', refreshSharedStock);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener('focus', refreshSharedStock);
-    };
-  }, [user?.id]);
-
   useEffect(() => { ls.setJSON('is_catalog', catalog); }, [catalog]);
   useEffect(() => { ls.setJSON('is_items', items); }, [items]);
   useEffect(() => { ls.setJSON('is_leads', leads); }, [leads]);
@@ -3447,14 +3436,19 @@ export default function App() {
   // SYNCHRONISATION SERVEUR
   const syncTimer = useRef(null);
   const mounted = useRef(false);
+  const lastSyncedData = useRef(new Map());
 
   useEffect(() => {
     if (!user || mounted.current) return;
-    const serverLoadKey = `is_server_loaded_v2_${user.id}`;
+    const serverLoadKey = `is_server_loaded_v3_${user.id}`;
     const alreadyLoaded = sessionStorage.getItem(serverLoadKey);
     if (alreadyLoaded) { mounted.current = true; return; }
     loadData().then(serverData => {
       if (serverData && typeof serverData === 'object') {
+        const sharedAdminInitialized = serverData.is_admin_shared_initialized === true;
+        const shouldSeedSharedAdmin = user.role === 'admin'
+          && !sharedAdminInitialized
+          && ADMIN_SHARED_SEED_KEYS.some(key => hasMeaningfulSyncValue(readLocalSyncValue(key)));
         const serverResetVersion = String(serverData.is_data_reset_version || '');
         const localResetVersion = String(localStorage.getItem('is_data_reset_version') || '');
         const resetState = serverResetVersion && serverResetVersion !== localResetVersion;
@@ -3469,10 +3463,11 @@ export default function App() {
             continue;
           }
           try {
-            const localValue = COMPANY_SYNC_KEYS.has(key) ? readLocalSyncValue(key) : null;
-            if (COMPANY_SYNC_KEYS.has(key)
-              && !hasMeaningfulSyncValue(val)
-              && hasMeaningfulSyncValue(localValue)) {
+            const localValue = readLocalSyncValue(key);
+            if ((shouldSeedSharedAdmin && hasMeaningfulSyncValue(localValue))
+              || (COMPANY_SYNC_KEYS.has(key)
+                && !hasMeaningfulSyncValue(val)
+                && hasMeaningfulSyncValue(localValue))) {
               continue;
             }
             if (typeof val === 'object') {
@@ -3496,6 +3491,9 @@ export default function App() {
       is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
       is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo,
       is_data_reset_version: localStorage.getItem('is_data_reset_version') || '',
+      is_admin_shared_initialized: user.role === 'admin' && ADMIN_SHARED_SEED_KEYS.some(
+        key => hasMeaningfulSyncValue(readLocalSyncValue(key)),
+      ),
       is_brands: brands,
       is_catalog: catalog, is_items: items, is_leads: leads, is_clients: clients,
       is_saved_docs: savedDocs, is_history_log: documentHistory,
@@ -3508,13 +3506,25 @@ export default function App() {
       is_counter_BC: peekNextDocNumber('BC'), is_counter_FACT: peekNextDocNumber('FACT'),
       is_counter_AVOIR: peekNextDocNumber('AVOIR'),
     };
-    saveData(data);
+    const changedData = {};
+    for (const [key, value] of Object.entries(data)) {
+      const serialized = JSON.stringify(value);
+      if (lastSyncedData.current.get(key) !== serialized) changedData[key] = value;
+    }
+    if (Object.keys(changedData).length === 0) return;
+    saveData(changedData).then(saved => {
+      if (!saved) return;
+      for (const [key, value] of Object.entries(changedData)) {
+        lastSyncedData.current.set(key, JSON.stringify(value));
+      }
+    });
   }, [
     activeTheme, language, currencyKey, globalFontSize, globalFontFamily, globalFontColor,
     companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo,
     brands, catalog, items, leads, clients, savedDocs, documentHistory,
     documentType, documentNumber, documentStatus, documentDate, validityDate, clientDetails, clientICE,
     representative, supplierName, orderRef, sourceDevisNumber, paymentMethod, paymentDueDate, parentFactRef,
+    user.role,
   ]);
 
   useEffect(() => {

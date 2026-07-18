@@ -11,7 +11,8 @@ const AuditContext = createContext(null);
 
 export function AuditProvider({ children }) {
   const { user } = useAuth();
-  const savedDocsDoc = useUserDoc(`saved_documents_${user?.id || 'anonymous'}`, []);
+  const dataNamespace = user?.role === 'admin' ? 'admin_shared' : (user?.id || 'anonymous');
+  const savedDocsDoc = useUserDoc(`saved_documents_${dataNamespace}`, []);
   const savedDocs = savedDocsDoc.data;
   const setSavedDocs = savedDocsDoc.setData;
 
