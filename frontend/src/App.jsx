@@ -1529,6 +1529,25 @@ const ls = {
   setJSON: (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} },
 };
 
+const COMPANY_SYNC_KEYS = new Set([
+  'is_company_name', 'is_company_address', 'is_company_phone',
+  'is_company_email', 'is_footer', 'is_logo', 'is_brands',
+]);
+
+const hasMeaningfulSyncValue = value => {
+  if (value === null || value === undefined) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return Object.keys(value).length > 0;
+  const normalized = String(value).trim();
+  return Boolean(normalized && normalized !== 'null' && normalized !== '[]' && normalized !== '{}');
+};
+
+const readLocalSyncValue = key => {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return null;
+  try { return JSON.parse(raw); } catch { return raw; }
+};
+
 const restoreTypographyBeforeAurora = () => {
   const auroraApplied = ls.get('is_aurora_typography_v2', '0') === '1'
     || ls.get('is_aurora_typography_v1', '0') === '1';
@@ -3450,6 +3469,12 @@ export default function App() {
             continue;
           }
           try {
+            const localValue = COMPANY_SYNC_KEYS.has(key) ? readLocalSyncValue(key) : null;
+            if (COMPANY_SYNC_KEYS.has(key)
+              && !hasMeaningfulSyncValue(val)
+              && hasMeaningfulSyncValue(localValue)) {
+              continue;
+            }
             if (typeof val === 'object') {
               localStorage.setItem(key, JSON.stringify(val));
             } else {
