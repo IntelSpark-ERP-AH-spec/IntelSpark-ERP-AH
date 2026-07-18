@@ -16,7 +16,7 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_DOCUMENT_BYTES = 128 * 1024;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const ROUTE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PDF_DIR = process.env.NETLIFY === 'true'
+const DEFAULT_PDF_DIR = (process.env.NETLIFY === 'true' || process.env.AWS_LAMBDA_FUNCTION_NAME)
   ? path.join('/tmp', 'message-pdfs')
   : path.resolve(ROUTE_DIR, '..', 'uploads', 'message-pdfs');
 const PDF_UPLOAD_DIR = path.resolve(process.env.MESSAGE_PDF_DIR || DEFAULT_PDF_DIR);
