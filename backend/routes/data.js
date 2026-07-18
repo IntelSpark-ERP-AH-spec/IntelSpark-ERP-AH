@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbQuery, dbRun, dbTransaction } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { ensureOrganizationForUser, isUserPrivateDataKey, organizationContextForUser } from '../organization.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -56,8 +57,57 @@ const KEY_RE = /^[a-zA-Z0-9_]{1,50}$/;
 const MAX_VALUE_BYTES = 5 * 1024 * 1024;
 
 function parseStoredJson(value, fallback = null) {
+  if (value !== null && typeof value === 'object') return value;
   try { return value === null || value === undefined ? fallback : JSON.parse(value); }
   catch { return fallback; }
+}
+
+const COMPANY_KEY_TO_COLUMN = Object.freeze({
+  is_company_name: 'company_name',
+  is_company_address: 'company_address',
+  is_company_phone: 'company_phone',
+  is_company_email: 'company_email',
+  is_footer: 'legal_mentions',
+  is_logo: 'logo_url',
+  is_brands: 'brands_json',
+});
+
+function getOrganizationDocument(organizationId, key) {
+  const row = dbGet('SELECT value_json FROM organization_documents WHERE organization_id = ? AND key = ?', [organizationId, key]);
+  return row ? parseStoredJson(row.value_json) : undefined;
+}
+
+function setOrganizationDocument(organizationId, userId, key, value) {
+  dbRun(`INSERT INTO organization_documents (organization_id, key, value_json, updated_by, version, updated_at)
+    VALUES (?, ?, ?, ?, 1, datetime('now'))
+    ON CONFLICT(organization_id, key) DO UPDATE SET value_json=excluded.value_json,
+      updated_by=excluded.updated_by, version=organization_documents.version+1, updated_at=datetime('now')`,
+  [organizationId, key, JSON.stringify(value), userId]);
+}
+
+function ensureCompanySettings(organizationId) {
+  dbRun(`INSERT INTO company_settings (organization_id, updated_at) VALUES (?, datetime('now'))
+    ON CONFLICT(organization_id) DO NOTHING`, [organizationId]);
+}
+
+function setCompanySetting(organizationId, key, value) {
+  const column = COMPANY_KEY_TO_COLUMN[key];
+  if (!column) return false;
+  ensureCompanySettings(organizationId);
+  const stored = key === 'is_brands' ? JSON.stringify(value ?? []) : (value ?? null);
+  dbRun(`UPDATE company_settings SET ${column} = ?, updated_at = datetime('now') WHERE organization_id = ?`, [stored, organizationId]);
+  return true;
+}
+
+function readCompanySettings(organizationId) {
+  const row = dbGet('SELECT * FROM company_settings WHERE organization_id = ?', [organizationId]);
+  if (!row) return {};
+  return {
+    is_company_name: row.company_name || '', is_company_address: row.company_address || '',
+    is_company_phone: row.company_phone || '', is_company_email: row.company_email || '',
+    is_footer: row.legal_mentions || '', is_logo: row.logo_url || '',
+    is_brands: parseStoredJson(row.brands_json, []),
+  };
 }
 
 function getDocument(userId, key) {
@@ -78,13 +128,7 @@ function teamKeyFor(user) {
 }
 
 function dataOwnerId(user, key = '') {
-  if (user?.role !== 'admin') return user.id;
-  if (key === 'ui_session_state' || key === 'user_preferences') return user.id;
-  const primaryAdmin = dbGet(`SELECT id FROM users
-    WHERE role = 'admin'
-    ORDER BY CASE WHEN lower(username) = 'admin' THEN 0 ELSE 1 END, created_at, id
-    LIMIT 1`);
-  return primaryAdmin?.id || user.id;
+  return isUserPrivateDataKey(key) ? user.id : user.id;
 }
 
 function legacyAdminDocumentKey(ownerId, key) {
@@ -107,11 +151,14 @@ router.post('/save', async (req, res) => {
       const jsonStr = JSON.stringify(v);
       if (jsonStr.length > MAX_VALUE_BYTES) return res.status(400).json({ error: `Valeur trop grande pour: ${k}` });
     }
-    const ownerId = dataOwnerId(req.user);
+    const organization = ensureOrganizationForUser(req.user.id);
     dbTransaction(() => {
-      for (const [key, value] of Object.entries(data)) setDocument(ownerId, key, value);
+      for (const [key, value] of Object.entries(data)) {
+        if (isUserPrivateDataKey(key)) setDocument(req.user.id, key, value);
+        else if (!setCompanySetting(organization.id, key, value)) setOrganizationDocument(organization.id, req.user.id, key, value);
+      }
     });
-    res.json({ success: true, scope: req.user.role === 'admin' ? 'admin_shared' : 'user' });
+    res.json({ success: true, scope: 'organization', organization_id: organization.id });
   } catch (e) {
     console.error('[user_data /save]', e);
     res.status(500).json({ error: e.message });
@@ -120,37 +167,53 @@ router.post('/save', async (req, res) => {
 
 router.get('/load', async (req, res) => {
   try {
-    const ownerId = dataOwnerId(req.user);
-    const map = await getUserMap(ownerId);
-    for (const row of dbQuery('SELECT key, value_json FROM user_documents WHERE user_id = ?', [ownerId])) {
+    const organization = ensureOrganizationForUser(req.user.id);
+    const map = {};
+    for (const row of dbQuery('SELECT key, value_json FROM user_documents WHERE user_id = ?', [req.user.id])) {
       if (row.key.startsWith('is_brands_chunk_')) continue;
+      if (isUserPrivateDataKey(row.key)) map[row.key] = parseStoredJson(row.value_json);
+    }
+    for (const row of dbQuery('SELECT key, value_json FROM organization_documents WHERE organization_id = ?', [organization.id])) {
       map[row.key] = parseStoredJson(row.value_json);
     }
-    res.json(map);
+    Object.assign(map, readCompanySettings(organization.id));
+    res.json({ ...map, _sync: { organization_id: organization.id, realtime_topic: organization.realtime_topic } });
   } catch (e) {
     console.error('[user_data /load]', e);
     res.status(500).json({ error: e.message });
   }
 });
 
+router.get('/context', (req, res) => {
+  try { res.json(organizationContextForUser(req.user)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Endpoints optimisés par clé (utilisés par useUserDoc) ────────────────────
 router.get('/doc/:key', async (req, res) => {
   try {
     if (!KEY_RE.test(req.params.key)) return res.status(400).json({ error: 'Clé invalide' });
-    const ownerId = dataOwnerId(req.user, req.params.key);
-    const stored = getDocument(ownerId, req.params.key);
+    const key = req.params.key;
+    const organization = ensureOrganizationForUser(req.user.id);
+    if (COMPANY_KEY_TO_COLUMN[key]) return res.json(readCompanySettings(organization.id)[key]);
+    const stored = isUserPrivateDataKey(key)
+      ? getDocument(req.user.id, key)
+      : getOrganizationDocument(organization.id, key);
     if (stored !== undefined) return res.json(stored);
-    if (req.user.role === 'admin') {
-      const previousKey = legacyAdminDocumentKey(ownerId, req.params.key);
-      const previousValue = previousKey ? getDocument(ownerId, previousKey) : undefined;
+    if (isUserPrivateDataKey(key) && req.user.role === 'admin') {
+      const previousKey = legacyAdminDocumentKey(req.user.id, key);
+      const previousValue = previousKey ? getDocument(req.user.id, previousKey) : undefined;
       if (previousValue !== undefined) {
-        setDocument(ownerId, req.params.key, previousValue);
+        setDocument(req.user.id, req.params.key, previousValue);
         return res.json(previousValue);
       }
     }
-    const legacyMap = await getUserMap(ownerId);
-    const legacyValue = legacyMap[req.params.key];
-    if (legacyValue !== undefined) setDocument(ownerId, req.params.key, legacyValue);
+    const legacyMap = await getUserMap(req.user.id);
+    const legacyValue = legacyMap[key];
+    if (legacyValue !== undefined) {
+      if (isUserPrivateDataKey(key)) setDocument(req.user.id, key, legacyValue);
+      else setOrganizationDocument(organization.id, req.user.id, key, legacyValue);
+    }
     res.json(legacyValue !== undefined ? legacyValue : null);
   } catch (e) {
     console.error('[user_data /doc GET]', e);
@@ -165,9 +228,11 @@ router.put('/doc/:key', async (req, res) => {
     const jsonStr = JSON.stringify(value);
     if (jsonStr.length > MAX_VALUE_BYTES) return res.status(400).json({ error: 'Valeur trop grande' });
 
-    const ownerId = dataOwnerId(req.user, req.params.key);
-    setDocument(ownerId, req.params.key, value);
-    res.json({ success: true, scope: ownerId === req.user.id ? 'user' : 'admin_shared' });
+    const key = req.params.key;
+    const organization = ensureOrganizationForUser(req.user.id);
+    if (isUserPrivateDataKey(key)) setDocument(req.user.id, key, value);
+    else if (!setCompanySetting(organization.id, key, value)) setOrganizationDocument(organization.id, req.user.id, key, value);
+    res.json({ success: true, scope: isUserPrivateDataKey(key) ? 'user' : 'organization' });
   } catch (e) {
     console.error('[user_data /doc PUT]', e);
     res.status(500).json({ error: e.message });
@@ -177,8 +242,11 @@ router.put('/doc/:key', async (req, res) => {
 router.delete('/doc/:key', async (req, res) => {
   try {
     if (!KEY_RE.test(req.params.key)) return res.status(400).json({ error: 'Clé invalide' });
-    const ownerId = dataOwnerId(req.user, req.params.key);
-    dbRun('DELETE FROM user_documents WHERE user_id = ? AND key = ?', [ownerId, req.params.key]);
+    const key = req.params.key;
+    const organization = ensureOrganizationForUser(req.user.id);
+    if (isUserPrivateDataKey(key)) dbRun('DELETE FROM user_documents WHERE user_id = ? AND key = ?', [req.user.id, key]);
+    else if (COMPANY_KEY_TO_COLUMN[key]) setCompanySetting(organization.id, key, key === 'is_brands' ? [] : null);
+    else dbRun('DELETE FROM organization_documents WHERE organization_id = ? AND key = ?', [organization.id, key]);
     res.json({ success: true });
   } catch (e) {
     console.error('[user_data /doc DELETE]', e);

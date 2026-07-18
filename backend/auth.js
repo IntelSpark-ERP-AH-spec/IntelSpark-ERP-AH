@@ -40,6 +40,7 @@ export function generateToken(user) {
       username: user.username,
       role: user.role,
       department: user.department,
+      organization_id: user.organization_id || 'org_default',
       permissions: getRolePermissions(user.role),
       tokenVersion: Number(user.token_version || 0),
     },
@@ -114,7 +115,7 @@ export function authMiddleware(req, res, next) {
     if (isTokenBlacklisted(decoded.jti)) {
       return res.status(401).json({ error: 'Session révoquée' });
     }
-    const currentUser = dbGet('SELECT id, username, role, department, active, token_version FROM users WHERE id = ?', [decoded.id]);
+    const currentUser = dbGet('SELECT id, username, role, department, organization_id, active, token_version FROM users WHERE id = ?', [decoded.id]);
     if (!currentUser || !currentUser.active) {
       return res.status(401).json({ error: 'Compte indisponible' });
     }
@@ -133,6 +134,7 @@ export function authMiddleware(req, res, next) {
       username: currentUser.username,
       role: currentUser.role,
       department: currentUser.department,
+      organization_id: currentUser.organization_id || decoded.organization_id || 'org_default',
       permissions: getRolePermissions(currentUser.role),
     };
     next();
@@ -150,7 +152,7 @@ export function optionalAuth(req, res, next) {
   try {
     const decoded = verifyToken(token);
     if (!isTokenBlacklisted(decoded.jti)) {
-      const currentUser = dbGet('SELECT id, username, role, department, active, token_version FROM users WHERE id = ?', [decoded.id]);
+      const currentUser = dbGet('SELECT id, username, role, department, organization_id, active, token_version FROM users WHERE id = ?', [decoded.id]);
       if (currentUser?.active && Number(decoded.tokenVersion || 0) === Number(currentUser.token_version || 0)) {
         req.user = { ...decoded, ...currentUser, permissions: getRolePermissions(currentUser.role) };
       }

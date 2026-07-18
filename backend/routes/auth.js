@@ -37,7 +37,7 @@ router.post('/login', async (req, res) => {
     const token = generateToken(user);
     res.json({
       token,
-      user: { id: user.id, username: user.username, role: user.role, department: user.department, full_name: user.full_name, email: user.email }
+      user: { id: user.id, username: user.username, role: user.role, department: user.department, organization_id: user.organization_id || 'org_default', full_name: user.full_name, email: user.email }
     });
   } catch (err) {
     console.error('Login Error:', err);
@@ -51,7 +51,7 @@ router.post('/logout', authMiddleware, (req, res) => {
 });
 
 router.get('/me', authMiddleware, (req, res) => {
-  const user = dbGet('SELECT id, username, role, department, full_name, email FROM users WHERE id = ?', [req.user.id]);
+  const user = dbGet('SELECT id, username, role, department, organization_id, full_name, email FROM users WHERE id = ?', [req.user.id]);
   if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
   res.json(user);
 });

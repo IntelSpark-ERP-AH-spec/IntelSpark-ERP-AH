@@ -62,6 +62,27 @@ export function useUserDoc(key, initial) {
     return () => { cancelled = true; };
   }, [key]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const reload = async () => {
+      if (saving || !getAuthToken()) return;
+      try {
+        const res = await fetch('/api/data/doc/' + encodeURIComponent(keyRef.current), {
+          credentials: 'same-origin', headers: authHeaders('GET'),
+        });
+        if (!cancelled && res.ok) {
+          const stored = await res.json();
+          if (stored !== null && stored !== undefined) {
+            lastSavedRef.current = JSON.stringify(stored);
+            setData(stored);
+          }
+        }
+      } catch (e) { if (!cancelled) setError(e.message); }
+    };
+    window.addEventListener('organization:changed', reload);
+    return () => { cancelled = true; window.removeEventListener('organization:changed', reload); };
+  }, [key, saving]);
+
   // ── Sauvegarde atomique debouncée ─────────────────────────────────────────
   const persist = useCallback(async (value, k) => {
     if (!getAuthToken()) return;

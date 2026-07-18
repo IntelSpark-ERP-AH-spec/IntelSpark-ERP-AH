@@ -1574,20 +1574,30 @@ restoreTypographyBeforeAurora();
 // ============================================================
 // AUTO-NUMBERING
 // ============================================================
-const peekNextDocNumber = (type) => {
+const documentCounters = new Map();
+const counterValue = (type) => {
+  if (documentCounters.has(type)) return documentCounters.get(type);
   const key = `is_counter_${type}`;
   const stored = parseInt(ls.get(key, '0'), 10);
   const current = Number.isFinite(stored) && stored >= 0 ? stored : 0;
+  documentCounters.set(type, current);
+  return current;
+};
+const setCounterValue = (type, value) => {
+  const direct = Number(value);
+  const suffix = String(value || '').match(/(\d+)$/)?.[1];
+  const parsed = Number.isFinite(direct) ? direct : Number(suffix || 0);
+  if (Number.isFinite(parsed) && parsed >= 0) documentCounters.set(type, parsed);
+};
+const peekNextDocNumber = (type) => {
+  const current = counterValue(type);
   const next = current + 1;
   const year = new Date().getFullYear();
   const pad = String(next).padStart(4, '0');
   return `${type}-${year}-${pad}`;
 };
 const commitDocNumber = (type) => {
-  const key = `is_counter_${type}`;
-  const stored = parseInt(ls.get(key, '0'), 10);
-  const current = Number.isFinite(stored) && stored >= 0 ? stored : 0;
-  ls.set(key, String(current + 1));
+  documentCounters.set(type, counterValue(type) + 1);
 };
 
 // ============================================================
@@ -1970,7 +1980,7 @@ const BulletinsPage = ({ t, language }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const { user, loading, logout, saveData, loadData, hasRole } = useAuth();
+  const { user, loading, logout, saveData, loadData, hasRole, organization, realtimeStatus, realtimeRevision, syncError } = useAuth();
   const { connect, disconnect, onlineUsers, connected, lastNotification } = useWS();
   const i18n = useAppI18n();
   const canDelete = hasRole('admin');
@@ -2165,13 +2175,6 @@ export default function App() {
   const [companyEmail, setCompanyEmail] = useState(() => ls.get('is_company_email', ''));
   const [companyFooter, setCompanyFooter] = useState(() => ls.get('is_footer', ''));
   const [brands, setBrands] = useState(() => ls.getJSON('is_brands', []));
-  useEffect(() => { ls.set('is_company_name', companyName); }, [companyName]);
-  useEffect(() => { ls.set('is_company_address', companyAddress); }, [companyAddress]);
-  useEffect(() => { ls.set('is_company_phone', companyPhone); }, [companyPhone]);
-  useEffect(() => { ls.set('is_company_email', companyEmail); }, [companyEmail]);
-  useEffect(() => { ls.set('is_footer', companyFooter); }, [companyFooter]);
-  useEffect(() => { ls.setJSON('is_brands', brands); }, [brands]);
-  useEffect(() => { if (companyLogo) ls.set('is_logo', companyLogo); else localStorage.removeItem('is_logo'); }, [companyLogo]);
 
   const [documentType, setDocumentType] = useState(() => ls.get('is_doc_type', 'DEV'));
   const [requestedDocumentType, setRequestedDocumentType] = useState(null);
@@ -2196,19 +2199,6 @@ export default function App() {
   const [timbreFiscal, setTimbreFiscal] = useState(0);
   const [acompte, setAcompte] = useState(0);
 
-  useEffect(() => { ls.set('is_doc_num', documentNumber); }, [documentNumber]);
-  useEffect(() => { ls.set('is_doc_status', documentStatus); }, [documentStatus]);
-  useEffect(() => { ls.set('is_doc_date', documentDate); }, [documentDate]);
-  useEffect(() => { ls.set('is_validity_date', validityDate); }, [validityDate]);
-  useEffect(() => { ls.set('is_client', clientDetails); }, [clientDetails]);
-  useEffect(() => { ls.set('is_client_ice', clientICE); }, [clientICE]);
-  useEffect(() => { ls.set('is_rep', representative); }, [representative]);
-  useEffect(() => { ls.set('is_supplier', supplierName); }, [supplierName]);
-  useEffect(() => { ls.set('is_order_ref', orderRef); }, [orderRef]);
-  useEffect(() => { ls.set('is_source_devis', sourceDevisNumber); }, [sourceDevisNumber]);
-  useEffect(() => { ls.set('is_payment', paymentMethod); }, [paymentMethod]);
-  useEffect(() => { ls.set('is_due_date', paymentDueDate); }, [paymentDueDate]);
-  useEffect(() => { ls.set('is_parent_fact', parentFactRef); }, [parentFactRef]);
 
   const isLocked = documentStatus === 'validated' || documentStatus === 'sent' || documentStatus === 'paid' || documentStatus === 'cancelled';
   const stockOptionalForCurrentDocument = ['DEV', 'BC', 'AVOIR'].includes(documentType)
@@ -2244,11 +2234,6 @@ export default function App() {
   const setDocumentHistory = historyDoc.setData;
   const [savedSearch, setSavedSearch] = useState('');
   const [isReturning, setIsReturning] = useState(false);
-  useEffect(() => { ls.setJSON('is_catalog', catalog); }, [catalog]);
-  useEffect(() => { ls.setJSON('is_items', items); }, [items]);
-  useEffect(() => { ls.setJSON('is_leads', leads); }, [leads]);
-  useEffect(() => { ls.setJSON('is_clients', clients); }, [clients]);
-  useEffect(() => { ls.setJSON('is_history_log', documentHistory); }, [documentHistory]);
 
   const [searchRef, setSearchRef] = useState('');
   const [manualName, setManualName] = useState('');
@@ -2710,7 +2695,6 @@ export default function App() {
     }
     const num = peekNextDocNumber(type);
     setDocumentType(type);
-    ls.set('is_doc_type', type);
     setDocumentNumber(num);
     setDocumentStatus('draft');
     setItems([]);
@@ -2847,7 +2831,6 @@ export default function App() {
     }
     commitDocNumber(targetType);
     setDocumentType(targetType);
-    ls.set('is_doc_type', targetType);
     setDocumentNumber(num);
     setDocumentStatus('draft');
     if (targetType === 'AVOIR') {
@@ -2905,7 +2888,6 @@ export default function App() {
       items.forEach(item => releaseReservation(item.ref, item.qty, false));
     }
     setDocumentType(doc.type);
-    ls.set('is_doc_type', doc.type);
     setDocumentNumber(doc.number);
     setDocumentStatus(doc.status);
     setDocumentDate(doc.date);
@@ -3309,16 +3291,29 @@ export default function App() {
     notify(fmt(t.clientInfoFormat, client.name), 'info');
   };
 
-  const handleLogoUpload = (e) => {
+  const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const maxSize = 2 * 1024 * 1024;
     if (file.size > maxSize) return notify('Logo trop volumineux (max 2 Mo)', 'error');
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
     if (!allowed.includes(file.type)) return notify('Format non supporté (PNG, JPG, WebP, SVG uniquement)', 'error');
-    const reader = new FileReader();
-    reader.onload = (ev) => setCompanyLogo(ev.target.result);
-    reader.readAsDataURL(file);
+    if (!organization?.logo_upload_url) return notify('Stockage logo indisponible', 'error');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await fetch(organization.logo_upload_url, {
+        method: 'POST', body,
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.url) throw new Error(result.error || 'Envoi impossible');
+      setCompanyLogo(result.url);
+      const saved = await saveData({ is_logo: result.url });
+      if (!saved) throw new Error('Sauvegarde impossible');
+      notify('Logo synchronisé', 'success');
+    } catch (error) { notify(error.message || 'Envoi impossible', 'error'); }
+    finally { e.target.value = ''; }
   };
 
   const handleBrandLogoUpload = (e) => {
@@ -3450,85 +3445,66 @@ export default function App() {
   const lastSyncedData = useRef(new Map());
   const [serverSyncReady, setServerSyncReady] = useState(false);
 
+  const applyServerData = useCallback((serverData) => {
+    if (!serverData || typeof serverData !== 'object') return;
+    const assign = (key, setter) => {
+      if (Object.prototype.hasOwnProperty.call(serverData, key)) setter(serverData[key]);
+    };
+    assign('is_company_name', setCompanyName); assign('is_company_address', setCompanyAddress);
+    assign('is_company_phone', setCompanyPhone); assign('is_company_email', setCompanyEmail);
+    assign('is_footer', setCompanyFooter); assign('is_logo', setCompanyLogo); assign('is_brands', setBrands);
+    if (!catalogDirtyRef.current) assign('is_catalog', value => setCatalogState(Array.isArray(value) ? value : []));
+    assign('is_items', setItems); assign('is_leads', setLeads); assign('is_clients', setClients);
+    assign('is_doc_type', setDocumentType); assign('is_doc_num', setDocumentNumber);
+    assign('is_doc_status', setDocumentStatus); assign('is_doc_date', setDocumentDate);
+    assign('is_validity_date', setValidityDate); assign('is_client', setClientDetails);
+    assign('is_client_ice', setClientICE); assign('is_rep', setRepresentative);
+    assign('is_supplier', setSupplierName); assign('is_order_ref', setOrderRef);
+    assign('is_source_devis', setSourceDevisNumber); assign('is_payment', setPaymentMethod);
+    assign('is_due_date', setPaymentDueDate); assign('is_parent_fact', setParentFactRef);
+    for (const type of ['DEV', 'BL', 'BC', 'FACT', 'AVOIR']) {
+      if (Object.prototype.hasOwnProperty.call(serverData, `is_counter_${type}`)) setCounterValue(type, serverData[`is_counter_${type}`]);
+    }
+    for (const [key, value] of Object.entries(serverData)) lastSyncedData.current.set(key, JSON.stringify(value));
+  }, []);
+
   useEffect(() => {
     if (!user) {
       mounted.current = false;
       setServerSyncReady(false);
       return undefined;
     }
-
     let cancelled = false;
-    const hydrationReloadKey = `is_server_hydration_reload_v4_${user.id}`;
-    if (sessionStorage.getItem(hydrationReloadKey) === '1') {
-      sessionStorage.removeItem(hydrationReloadKey);
-      mounted.current = true;
-      setServerSyncReady(true);
-      return undefined;
-    }
-
     mounted.current = false;
     setServerSyncReady(false);
-    loadData().then(async serverData => {
+    (async () => {
+      let serverData = await loadData();
       if (cancelled) return;
-      if (serverData && typeof serverData === 'object') {
-        const sharedAdminInitialized = serverData.is_admin_shared_initialized === true;
-        const shouldSeedSharedAdmin = user.role === 'admin'
-          && !sharedAdminInitialized
-          && ADMIN_SHARED_SEED_KEYS.some(key => hasMeaningfulSyncValue(readLocalSyncValue(key)));
-        const sharedSeed = {};
-        const serverResetVersion = String(serverData.is_data_reset_version || '');
-        const localResetVersion = String(localStorage.getItem('is_data_reset_version') || '');
-        const resetState = serverResetVersion && serverResetVersion !== localResetVersion;
-        if (resetState) {
-          for (const key of RESETTABLE_KEYS) {
-            localStorage.removeItem(key);
-          }
+      if (serverData && user.role === 'admin' && serverData.is_admin_shared_initialized !== true) {
+        const legacySeed = {};
+        for (const key of ADMIN_SHARED_SEED_KEYS) {
+          const localValue = readLocalSyncValue(key);
+          if (!hasMeaningfulSyncValue(serverData[key]) && hasMeaningfulSyncValue(localValue)) legacySeed[key] = localValue;
         }
-        for (const [key, val] of Object.entries(serverData)) {
-          if (key === 'is_data_reset_version') {
-            localStorage.setItem(key, serverResetVersion || '');
-            continue;
-          }
-          try {
-            const localValue = readLocalSyncValue(key);
-            const shouldRecoverLocalCatalog = key === 'is_catalog'
-              && user.role === 'admin'
-              && !resetState
-              && !hasMeaningfulSyncValue(val)
-              && hasMeaningfulSyncValue(localValue);
-            if ((shouldSeedSharedAdmin && hasMeaningfulSyncValue(localValue))
-              || shouldRecoverLocalCatalog
-              || (COMPANY_SYNC_KEYS.has(key)
-                && !hasMeaningfulSyncValue(val)
-                && hasMeaningfulSyncValue(localValue))) {
-              if ((shouldSeedSharedAdmin || shouldRecoverLocalCatalog)
-                && ADMIN_SHARED_SEED_KEYS.includes(key)) {
-                sharedSeed[key] = localValue;
-              }
-              continue;
-            }
-            if (typeof val === 'object') {
-              localStorage.setItem(key, JSON.stringify(val));
-            } else {
-              localStorage.setItem(key, String(val));
-            }
-          } catch {}
+        if (Object.keys(legacySeed).length && await saveData({ ...legacySeed, is_admin_shared_initialized: true })) {
+          serverData = await loadData();
         }
-        if (Object.keys(sharedSeed).length > 0) {
-          const seeded = await saveData({ ...sharedSeed, is_admin_shared_initialized: true });
-          if (!seeded && Object.prototype.hasOwnProperty.call(sharedSeed, 'is_catalog')) {
-            catalogDirtyRef.current = true;
-          }
-        }
-        sessionStorage.setItem(hydrationReloadKey, '1');
-        window.location.reload();
-        return;
+      }
+      if (cancelled) return;
+      applyServerData(serverData);
+      for (const key of [...RESETTABLE_KEYS, ...ADMIN_SHARED_SEED_KEYS, ...COMPANY_SYNC_KEYS]) {
+        try { localStorage.removeItem(key); } catch {}
       }
       mounted.current = true;
       setServerSyncReady(true);
-    });
+    })();
     return () => { cancelled = true; };
-  }, [user?.id, user?.role, loadData, saveData]);
+  }, [user?.id, user?.role, loadData, saveData, applyServerData]);
+
+  useEffect(() => {
+    if (!serverSyncReady || !realtimeRevision || catalogDirtyRef.current) return;
+    loadData().then(applyServerData);
+  }, [realtimeRevision, serverSyncReady, loadData, applyServerData]);
 
   const syncToServer = useCallback(() => {
     const data = {
@@ -3536,7 +3512,6 @@ export default function App() {
       is_font_size: String(globalFontSize), is_font_family: globalFontFamily, is_font_color: globalFontColor,
       is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
       is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo,
-      is_data_reset_version: localStorage.getItem('is_data_reset_version') || '',
       is_admin_shared_initialized: user?.role === 'admin' && ADMIN_SHARED_SEED_KEYS.some(
         key => hasMeaningfulSyncValue(readLocalSyncValue(key)),
       ),
@@ -3548,9 +3523,9 @@ export default function App() {
       is_rep: representative, is_supplier: supplierName, is_order_ref: orderRef,
       is_source_devis: sourceDevisNumber,
       is_payment: paymentMethod, is_due_date: paymentDueDate, is_parent_fact: parentFactRef,
-      is_counter_DEV: peekNextDocNumber('DEV'), is_counter_BL: peekNextDocNumber('BL'),
-      is_counter_BC: peekNextDocNumber('BC'), is_counter_FACT: peekNextDocNumber('FACT'),
-      is_counter_AVOIR: peekNextDocNumber('AVOIR'),
+      is_counter_DEV: counterValue('DEV'), is_counter_BL: counterValue('BL'),
+      is_counter_BC: counterValue('BC'), is_counter_FACT: counterValue('FACT'),
+      is_counter_AVOIR: counterValue('AVOIR'),
     };
     const changedData = {};
     for (const [key, value] of Object.entries(data)) {
@@ -3576,7 +3551,7 @@ export default function App() {
   useEffect(() => {
     if (!serverSyncReady || !mounted.current) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(syncToServer, 3000);
+    syncTimer.current = setTimeout(syncToServer, 600);
     return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
   }, [serverSyncReady, syncToServer]);
 
@@ -3606,37 +3581,10 @@ export default function App() {
 
   useEffect(() => {
     if (!serverSyncReady || !user) return undefined;
-    let cancelled = false;
-    let inFlight = false;
-    const pullCatalog = async () => {
-      if (cancelled || inFlight || document.hidden || catalogDirtyRef.current) return;
-      inFlight = true;
-      try {
-        const remoteCatalog = await api.request('/data/doc/is_catalog');
-        if (!cancelled && Array.isArray(remoteCatalog) && !catalogDirtyRef.current) {
-          const remoteSerialized = JSON.stringify(remoteCatalog);
-          setCatalogState(current => {
-            if (JSON.stringify(current) === remoteSerialized) return current;
-            ls.setJSON('is_catalog', remoteCatalog);
-            lastSyncedData.current.set('is_catalog', remoteSerialized);
-            return remoteCatalog;
-          });
-        }
-      } catch {}
-      finally { inFlight = false; }
-    };
-    const onVisibility = () => { if (!document.hidden) pullCatalog(); };
-    const interval = window.setInterval(pullCatalog, 3000);
-    window.addEventListener('focus', pullCatalog);
-    document.addEventListener('visibilitychange', onVisibility);
-    pullCatalog();
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener('focus', pullCatalog);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [serverSyncReady, user?.id]);
+    const refresh = () => { if (!document.hidden && !catalogDirtyRef.current) loadData().then(applyServerData); };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [serverSyncReady, user?.id, loadData, applyServerData]);
 
   const autoSaveTimer = useRef(null);
   const autoSave = useCallback(() => {
@@ -3890,6 +3838,16 @@ export default function App() {
       <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" style={{ display: 'none' }} />
       <input type="file" ref={brandInputRef} onChange={handleBrandLogoUpload} accept="image/*" style={{ display: 'none' }} />
       <Notification msg={notification.msg} type={notification.type} title={notification.title} action={notification.action} secondaryAction={notification.secondaryAction} onClose={closeNotify} />
+      {(!serverSyncReady || syncError) && (
+        <div role="status" className="no-print" style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 5000, padding: '10px 14px', borderRadius: 10, background: syncError ? '#7f1d1d' : '#0f766e', color: '#fff', fontWeight: 700, boxShadow: '0 10px 30px rgba(15,23,42,.2)' }}>
+          {syncError || 'Synchronisation Supabase…'}
+        </div>
+      )}
+      {serverSyncReady && !syncError && realtimeStatus !== 'subscribed' && realtimeStatus !== 'idle' && (
+        <div className="no-print" style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 4999, padding: '7px 11px', borderRadius: 9, background: '#fff7ed', color: '#9a3412', border: '1px solid #fdba74', fontWeight: 700 }}>
+          Reconnexion temps réel…
+        </div>
+      )}
 
       {/* HEADER */}
       <div className="no-print fleetparts-topbar" style={{ background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(226,232,240,0.7)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 20, gap: 12 }}>

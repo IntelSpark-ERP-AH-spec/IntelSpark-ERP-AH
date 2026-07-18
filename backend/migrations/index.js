@@ -223,6 +223,80 @@ const migrations = [
           JSON.stringify(['monitoring', 'self_healing', 'security', 'supervised_actions', 'memory']));
     },
   },
+  {
+    version: '20260718_013_organization_sync',
+    description: 'Organisation, donnees partagees et parametres entreprise',
+    up(db) {
+      db.exec(`CREATE TABLE IF NOT EXISTS organizations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        realtime_topic TEXT NOT NULL UNIQUE,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )`);
+      db.prepare(`INSERT OR IGNORE INTO organizations (id, name, realtime_topic)
+        VALUES (?, ?, ?)`)
+        .run('org_default', 'IntelSpark ERP-AH', crypto.randomBytes(32).toString('hex'));
+
+      const addColumn = (table, column, definition) => {
+        const columns = new Set(db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all().map((entry) => entry.name));
+        if (!columns.has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      };
+      addColumn('users', 'organization_id', "TEXT DEFAULT 'org_default'");
+      addColumn('produits', 'organization_id', "TEXT DEFAULT 'org_default'");
+      addColumn('stock_mouvements', 'organization_id', "TEXT DEFAULT 'org_default'");
+      db.exec("UPDATE users SET organization_id='org_default' WHERE organization_id IS NULL OR organization_id=''");
+      db.exec("UPDATE produits SET organization_id='org_default' WHERE organization_id IS NULL OR organization_id=''");
+      db.exec(`UPDATE stock_mouvements SET organization_id = COALESCE(
+        (SELECT organization_id FROM produits WHERE produits.id = stock_mouvements.produit_id),
+        'org_default'
+      ) WHERE organization_id IS NULL OR organization_id=''`);
+
+      db.exec(`CREATE TABLE IF NOT EXISTS organization_documents (
+        organization_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value_json TEXT NOT NULL,
+        updated_by TEXT,
+        version INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (organization_id, key),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+        FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+      )`);
+      db.exec(`CREATE TABLE IF NOT EXISTS company_settings (
+        organization_id TEXT PRIMARY KEY,
+        company_name TEXT NOT NULL DEFAULT '',
+        company_address TEXT NOT NULL DEFAULT '',
+        company_phone TEXT NOT NULL DEFAULT '',
+        company_email TEXT NOT NULL DEFAULT '',
+        legal_mentions TEXT NOT NULL DEFAULT '',
+        logo_url TEXT,
+        brands_json TEXT NOT NULL DEFAULT '[]',
+        updated_by TEXT,
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+        FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+      )`);
+      db.prepare('INSERT OR IGNORE INTO company_settings (organization_id) VALUES (?)').run('org_default');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_organization_documents_updated ON organization_documents(organization_id, updated_at DESC)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_produits_organization_active ON produits(organization_id, actif, designation)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_stock_mouvements_organization_date ON stock_mouvements(organization_id, created_at DESC)');
+
+      const admin = db.prepare("SELECT id FROM users WHERE role='admin' ORDER BY CASE WHEN lower(username)='admin' THEN 0 ELSE 1 END, created_at, id LIMIT 1").get();
+      if (admin) {
+        const privateKeys = new Set([
+          'ui_session_state', 'user_preferences', 'is_theme', 'is_lang', 'is_currency',
+          'is_font_size', 'is_font_family', 'is_font_color', 'is_active_page',
+        ]);
+        const rows = db.prepare('SELECT key, value_json, updated_at FROM user_documents WHERE user_id=?').all(admin.id);
+        const insertDocument = db.prepare(`INSERT OR IGNORE INTO organization_documents
+          (organization_id, key, value_json, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)`);
+        for (const row of rows) {
+          if (!privateKeys.has(row.key)) insertDocument.run('org_default', row.key, row.value_json, admin.id, row.updated_at);
+        }
+      }
+    },
+  },
 ];
 
 function checksum(migration) {

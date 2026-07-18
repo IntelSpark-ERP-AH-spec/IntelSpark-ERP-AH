@@ -38,6 +38,7 @@ export default function Settings() {
   const { language, setLanguage } = useLanguage();
   const { code: currencyCode, setCode: setCurrencyCode, CURRENCIES } = useCurrency();
   const preferences = useUserDoc('user_preferences', null);
+  const organizationAccounting = useUserDoc('organization_accounting_settings', null);
   const hydratedRef = useRef(false);
   const lastSavedSmtpRef = useRef('');
   const [activeSection, setActiveSection] = useState('general');
@@ -60,12 +61,16 @@ export default function Settings() {
     if (!preferences.loaded || hydratedRef.current || !preferences.data) return;
     hydratedRef.current = true;
     if (preferences.data.visual) setVisual(current => ({ ...current, ...preferences.data.visual }));
-    if (preferences.data.fiscal) setFiscal(current => ({ ...current, ...preferences.data.fiscal }));
-    if (preferences.data.accounts) setAccounts(current => ({ ...current, ...preferences.data.accounts }));
     if (preferences.data.theme) setTheme('light');
     if (preferences.data.language) setLanguage(preferences.data.language);
     if (preferences.data.currency) setCurrencyCode(preferences.data.currency);
   }, [preferences.loaded, preferences.data, setLanguage, setCurrencyCode]);
+
+  useEffect(() => {
+    if (!organizationAccounting.loaded || !organizationAccounting.data) return;
+    if (organizationAccounting.data.fiscal) setFiscal(current => ({ ...current, ...organizationAccounting.data.fiscal }));
+    if (organizationAccounting.data.accounts) setAccounts(current => ({ ...current, ...organizationAccounting.data.accounts }));
+  }, [organizationAccounting.loaded, organizationAccounting.data]);
 
   useEffect(() => {
     api.getMySmtp().then(data => {
@@ -124,13 +129,10 @@ export default function Settings() {
   }, [visual]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEYS.fiscal, JSON.stringify(fiscal));
-    localStorage.setItem('is_default_tva', String(fiscal.tvaRate));
     window.dispatchEvent(new CustomEvent('settings:changed', { detail: { fiscal } }));
   }, [fiscal]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEYS.comptable, JSON.stringify(accounts));
     window.dispatchEvent(new CustomEvent('settings:changed', { detail: { accounts } }));
   }, [accounts]);
 
@@ -141,8 +143,13 @@ export default function Settings() {
 
   useEffect(() => {
     if (!preferences.loaded || !hydratedRef.current) return;
-    preferences.setData(current => ({ ...(current || {}), language, currency: currencyCode, visual, fiscal, accounts, theme }));
-  }, [language, currencyCode, visual, fiscal, accounts, theme, preferences.loaded]);
+    preferences.setData(current => ({ ...(current || {}), language, currency: currencyCode, visual, theme }));
+  }, [language, currencyCode, visual, theme, preferences.loaded]);
+
+  useEffect(() => {
+    if (!organizationAccounting.loaded) return;
+    organizationAccounting.setData({ fiscal, accounts });
+  }, [fiscal, accounts, organizationAccounting.loaded]);
 
   async function handleLogout() {
     if (!(await systemConfirm('Fermer votre session maintenant ?', { danger: false, confirmLabel: 'Se déconnecter' }))) return;
@@ -152,7 +159,7 @@ export default function Settings() {
 
   return (
     <section className="settings-page">
-      {notice && <div className={`settings-notice settings-notice-${notice.type}`} role="status">{notice.message}</div>}
+      {(notice || preferences.error || organizationAccounting.error) && <div className={`settings-notice settings-notice-${notice?.type || 'error'}`} role="status">{notice?.message || preferences.error || organizationAccounting.error}</div>}
 
       <header className="settings-hero">
         <div><span>{t('Configuration')} · {t('Espace personnel')}</span><h1>{t('Paramètres')}</h1><p>{t('Personnalisez affichage, fiscalité, comptabilité et messagerie.')}</p></div>

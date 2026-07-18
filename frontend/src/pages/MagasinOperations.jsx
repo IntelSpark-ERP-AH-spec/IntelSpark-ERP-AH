@@ -62,15 +62,17 @@ export function ReceptionTab({ canEdit, canDelete = false, showMsg }) {
 
   useEffect(() => {
     loadReceptions(); loadFournisseurs(); loadCommandes(); loadProduits();
-    try {
-      const draft = JSON.parse(localStorage.getItem('is_import_reception_draft') || 'null');
+    let cancelled = false;
+    api.request('/data/doc/is_import_reception_draft').then(async draft => {
+      if (cancelled) return;
       if (draft?.items?.length) {
         setForm({ fournisseur_id: '', fournisseur_nom: draft.fournisseur_nom || '', num_bl: draft.num_bl || '', date_reception: draft.date_reception || new Date().toISOString().slice(0, 10), commande_id: '' });
         setItems(draft.items.map((item) => ({ ...item, quantite_commandee: 0, quantite_recue: item.quantite_recue || item.quantite || 0, ecart: item.quantite_recue || item.quantite || 0, etat: 'conforme' })));
-        localStorage.removeItem('is_import_reception_draft');
+        await api.request('/data/doc/is_import_reception_draft', { method: 'DELETE' });
         showMsg('Arrivage importé chargé : pointez les pièces avant validation.', 'info');
       }
-    } catch {}
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   async function loadReceptions() {

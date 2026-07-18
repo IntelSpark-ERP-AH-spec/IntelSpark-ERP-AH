@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api, setAuthToken, getAuthToken } from './api';
+import { subscribeOrganization } from './supabaseRealtime';
 
 const AuthContext = createContext(null);
 const DATA_CHUNK_BYTES = 3 * 1024 * 1024;
@@ -55,6 +56,10 @@ async function restoreLargeEntries(data) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [organization, setOrganization] = useState(null);
+  const [realtimeStatus, setRealtimeStatus] = useState('idle');
+  const [realtimeRevision, setRealtimeRevision] = useState(0);
+  const [syncError, setSyncError] = useState(null);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -70,18 +75,38 @@ export function AuthProvider({ children }) {
     }).finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!user || !getAuthToken()) {
+      setOrganization(null);
+      setRealtimeStatus('idle');
+      return undefined;
+    }
+    let unsubscribe = () => {};
+    let cancelled = false;
+    api.request('/data/context').then(context => {
+      if (cancelled) return;
+      setOrganization(context);
+      setSyncError(null);
+      unsubscribe = subscribeOrganization(context.realtime_topic, payload => {
+        setRealtimeRevision(value => value + 1);
+        window.dispatchEvent(new CustomEvent('organization:changed', { detail: payload }));
+      }, setRealtimeStatus);
+    }).catch(error => {
+      if (!cancelled) setSyncError(error.message || 'Synchronisation indisponible');
+    });
+    return () => { cancelled = true; unsubscribe(); };
+  }, [user?.id, user?.organization_id]);
+
   const login = useCallback(async (username, password) => {
     const data = await api.login(username, password);
     if (data.token) setAuthToken(data.token);
     const u = data.user || data;
-    sessionStorage.removeItem(`is_server_loaded_v3_${u.id}`);
     setUser(u);
     return u;
   }, []);
 
   const logout = useCallback(async () => {
     try { await api.logout(); } catch {}
-    if (user?.id) sessionStorage.removeItem(`is_server_loaded_v3_${user.id}`);
     setAuthToken(null);
     setUser(null);
   }, [user?.id]);
@@ -101,7 +126,8 @@ export function AuthProvider({ children }) {
         if (results.some(result => !result)) return false;
       }
       return true;
-    } catch {
+    } catch (error) {
+      setSyncError(error.message || 'Sauvegarde impossible');
       return false;
     }
   }, []);
@@ -112,13 +138,17 @@ export function AuthProvider({ children }) {
         headers: { 'Authorization': `Bearer ${getAuthToken()}` },
         credentials: 'same-origin',
       });
-      if (res.ok) return await restoreLargeEntries(await res.json());
-    } catch {}
+      if (res.ok) {
+        setSyncError(null);
+        return await restoreLargeEntries(await res.json());
+      }
+      throw new Error('Chargement partagé impossible');
+    } catch (error) { setSyncError(error.message || 'Chargement partagé impossible'); }
     return null;
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, hasRole, hasDept, saveData, loadData }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, hasRole, hasDept, saveData, loadData, organization, realtimeStatus, realtimeRevision, syncError }}>
       {children}
     </AuthContext.Provider>
   );
