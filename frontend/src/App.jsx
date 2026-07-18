@@ -3291,15 +3291,8 @@ export default function App() {
     notify(fmt(t.clientInfoFormat, client.name), 'info');
   };
 
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const maxSize = 2 * 1024 * 1024;
-    if (file.size > maxSize) return notify('Logo trop volumineux (max 2 Mo)', 'error');
-    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
-    if (!allowed.includes(file.type)) return notify('Format non supporté (PNG, JPG, WebP, SVG uniquement)', 'error');
-    if (!organization?.logo_upload_url) return notify('Stockage logo indisponible', 'error');
-    try {
+  const uploadCompanyLogo = useCallback(async (file) => {
+      if (!organization?.logo_upload_url) throw new Error('Stockage logo indisponible');
       const body = new FormData();
       body.append('file', file);
       const response = await fetch(organization.logo_upload_url, {
@@ -3308,8 +3301,20 @@ export default function App() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.url) throw new Error(result.error || 'Envoi impossible');
-      setCompanyLogo(result.url);
-      const saved = await saveData({ is_logo: result.url });
+      return result.url;
+  }, [organization?.logo_upload_url]);
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const maxSize = 2 * 1024 * 1024;
+    if (file.size > maxSize) return notify('Logo trop volumineux (max 2 Mo)', 'error');
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+    if (!allowed.includes(file.type)) return notify('Format non supporté (PNG, JPG, WebP, SVG uniquement)', 'error');
+    try {
+      const url = await uploadCompanyLogo(file);
+      setCompanyLogo(url);
+      const saved = await saveData({ is_logo: url });
       if (!saved) throw new Error('Sauvegarde impossible');
       notify('Logo synchronisé', 'success');
     } catch (error) { notify(error.message || 'Envoi impossible', 'error'); }
@@ -3469,7 +3474,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !organization) {
       mounted.current = false;
       setServerSyncReady(false);
       return undefined;
@@ -3483,7 +3488,13 @@ export default function App() {
       if (serverData && user.role === 'admin') {
         const legacySeed = {};
         for (const key of [...new Set([...ADMIN_SHARED_SEED_KEYS, ...COMPANY_SYNC_KEYS])]) {
-          const localValue = readLocalSyncValue(key);
+          let localValue = readLocalSyncValue(key);
+          if (key === 'is_logo' && typeof localValue === 'string' && localValue.startsWith('data:image/')) {
+            try {
+              const blob = await fetch(localValue).then(response => response.blob());
+              localValue = await uploadCompanyLogo(new File([blob], 'company-logo', { type: blob.type }));
+            } catch { localValue = null; }
+          }
           if (!hasMeaningfulSyncValue(serverData[key]) && hasMeaningfulSyncValue(localValue)) legacySeed[key] = localValue;
         }
         const shouldMarkInitialized = serverData.is_admin_shared_initialized !== true;
@@ -3495,13 +3506,14 @@ export default function App() {
       if (cancelled) return;
       applyServerData(serverData);
       for (const key of [...RESETTABLE_KEYS, ...ADMIN_SHARED_SEED_KEYS, ...COMPANY_SYNC_KEYS]) {
+        if (key === 'is_logo' && !hasMeaningfulSyncValue(serverData?.is_logo)) continue;
         try { localStorage.removeItem(key); } catch {}
       }
       mounted.current = true;
       setServerSyncReady(true);
     })();
     return () => { cancelled = true; };
-  }, [user?.id, user?.role, loadData, saveData, applyServerData]);
+  }, [user?.id, user?.role, organization?.id, loadData, saveData, applyServerData, uploadCompanyLogo]);
 
   useEffect(() => {
     if (!serverSyncReady || !realtimeRevision || catalogDirtyRef.current) return;
