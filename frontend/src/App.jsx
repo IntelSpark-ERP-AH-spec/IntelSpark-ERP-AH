@@ -3480,13 +3480,15 @@ export default function App() {
     (async () => {
       let serverData = await loadData();
       if (cancelled) return;
-      if (serverData && user.role === 'admin' && serverData.is_admin_shared_initialized !== true) {
+      if (serverData && user.role === 'admin') {
         const legacySeed = {};
-        for (const key of ADMIN_SHARED_SEED_KEYS) {
+        for (const key of [...new Set([...ADMIN_SHARED_SEED_KEYS, ...COMPANY_SYNC_KEYS])]) {
           const localValue = readLocalSyncValue(key);
           if (!hasMeaningfulSyncValue(serverData[key]) && hasMeaningfulSyncValue(localValue)) legacySeed[key] = localValue;
         }
-        if (Object.keys(legacySeed).length && await saveData({ ...legacySeed, is_admin_shared_initialized: true })) {
+        const shouldMarkInitialized = serverData.is_admin_shared_initialized !== true;
+        if ((Object.keys(legacySeed).length || shouldMarkInitialized)
+          && await saveData({ ...legacySeed, is_admin_shared_initialized: true })) {
           serverData = await loadData();
         }
       }
