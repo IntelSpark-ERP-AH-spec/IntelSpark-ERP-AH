@@ -3491,7 +3491,7 @@ export default function App() {
       is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
       is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo,
       is_data_reset_version: localStorage.getItem('is_data_reset_version') || '',
-      is_admin_shared_initialized: user.role === 'admin' && ADMIN_SHARED_SEED_KEYS.some(
+      is_admin_shared_initialized: user?.role === 'admin' && ADMIN_SHARED_SEED_KEYS.some(
         key => hasMeaningfulSyncValue(readLocalSyncValue(key)),
       ),
       is_brands: brands,
@@ -3524,7 +3524,7 @@ export default function App() {
     brands, catalog, items, leads, clients, savedDocs, documentHistory,
     documentType, documentNumber, documentStatus, documentDate, validityDate, clientDetails, clientICE,
     representative, supplierName, orderRef, sourceDevisNumber, paymentMethod, paymentDueDate, parentFactRef,
-    user.role,
+    user?.role,
   ]);
 
   useEffect(() => {
