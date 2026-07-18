@@ -64,7 +64,7 @@ test('websocket requires authentication and limits traffic', () => {
   assert.match(websocket, /MAX_CONNECTIONS_PER_USER/);
   assert.match(server, /const realtimeServer = isDev \? auxiliaryServer : server/);
   assert.match(server, /setupWebSocket\(realtimeServer\)/);
-  assert.match(vite, /target: 'ws:\/\/localhost:3001'/);
+  assert.match(vite, /target: 'ws:\/\/127\.0\.0\.1:3001'/);
   assert.doesNotMatch(client, /ws\.onopen = \(\) => \{\s*setConnected\(true\)/);
 });
 
@@ -262,7 +262,7 @@ test('printing, saved documents, status, and history stay complete', () => {
   assert.match(app, /className="print-document-host"/);
   assert.match(app, /position: fixed !important; inset: 0 !important/);
   assert.match(app, /erp-print-frame/);
-  assert.match(app, /frame\.contentWindow\?\.print\(\)/);
+  assert.match(app, /printWindow\.print\(\)/);
   assert.match(app, /const buildExactPrintDocument/);
   assert.match(app, /const mountExactDocumentFrame/);
   assert.match(app, /frame = await mountExactDocumentFrame\(\)/);
@@ -276,7 +276,7 @@ test('printing, saved documents, status, and history stay complete', () => {
   assert.match(app, /const brandHtml = brands\.map/);
   assert.match(app, /class="brands">\$\{brandHtml\}<\/section>/);
   assert.doesNotMatch(app, /brandsLabel|brands-title|print-brands-title/);
-  assert.match(app, /href="\/print-document\.css"/);
+  assert.match(app, /href="\/print-document\.css\?v=[^"]+"/);
   assert.match(printCss, /grid-template-rows: 38mm 10mm 14mm 155mm 26mm 18mm 22mm/);
   assert.match(app, /class="box payment-box"/);
   assert.match(app, /class="box tax tax-box"/);
@@ -288,15 +288,15 @@ test('printing, saved documents, status, and history stay complete', () => {
   assert.match(printCss, /\.brands \{[\s\S]*border: \.25mm solid #c4c9cf/);
   assert.match(printCss, /\.brands \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*justify-content: center/);
   assert.match(printCss, /\.brand \{[\s\S]*flex: 0 0 calc\(\(100% - 14mm\) \/ 8\)/);
-  assert.match(printCss, /article\.sheet \.head \{[\s\S]*grid-template-columns: 26% 36% 38%;[\s\S]*align-items: stretch/);
+  assert.match(printCss, /article\.sheet \.head \{[\s\S]*grid-template-columns: 22% 40% 38%;[\s\S]*align-items: stretch/);
   assert.match(printCss, /article\.sheet \.head > \.logo,[\s\S]*height: 100%/);
   assert.match(printCss, /article\.sheet \.head > \.logo \{ display: grid; place-items: start start/);
   assert.match(printCss, /article\.sheet \.head > \.client \{ display: grid; align-content: start; justify-items: start/);
   assert.doesNotMatch(printCss, /translateX\(-20mm\)/);
   assert.doesNotMatch(printCss, /article\.sheet \.head > :not\(:last-child\).*border-right/);
   assert.match(printCss, /grid-template-rows: 38mm;[\s\S]*height: 38mm/);
-  assert.match(printCss, /article\.sheet \.head > \.logo,[\s\S]*padding: 2mm;[\s\S]*align-self: stretch/);
-  assert.match(app, /\.head\{display:grid;grid-template-columns:26% 36% 38%;grid-template-rows:38mm;width:100%;height:38mm/);
+  assert.match(printCss, /article\.sheet \.head > \.logo,[\s\S]*padding: 0 2mm 2mm;[\s\S]*align-self: start/);
+  assert.match(app, /\.head\{display:grid;grid-template-columns:22% 40% 38%;grid-template-rows:38mm;width:100%;height:38mm/);
   assert.match(app, /\.logo\{display:grid;place-items:start start\}/);
   assert.doesNotMatch(app, /\.company\{transform:translateX\(-20mm\)/);
   assert.match(app, /\.print-empty-row \{[\s\S]*height: 7\.2mm !important/);

@@ -76,14 +76,16 @@ router.post('/send', async (req, res) => {
 });
 
 router.get('/history', (req, res) => {
-  const account = dbGet('SELECT smtp_user FROM users WHERE id = ?', [req.user.id]);
+  const userId = String(req.user?.id || '');
+  const account = dbGet('SELECT smtp_user FROM users WHERE id = ?', [userId]);
   if (!account?.smtp_user) return res.json([]);
+  const accountEmail = String(account.smtp_user);
   return res.json(dbQuery(`SELECT id, direction, correspondent, subject, body, created_at,
       sender_name, sender_email, account_email, is_read
     FROM email_history WHERE user_id = ?
       AND (account_email = ? OR (account_email IS NULL AND direction = 'sent'))
       AND id NOT IN (SELECT email_id FROM email_deletions WHERE user_id = ?)
-    ORDER BY created_at DESC LIMIT 500`, [req.user.id, account.smtp_user]));
+    ORDER BY created_at DESC LIMIT 500`, [userId, accountEmail, userId]));
 });
 
 router.post('/sync', async (req, res) => {

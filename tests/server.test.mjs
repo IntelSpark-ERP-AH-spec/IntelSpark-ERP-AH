@@ -123,6 +123,7 @@ test('production server supports one hundred authenticated users', { timeout: 60
       MESSAGE_PDF_DIR: path.join(runtimeDir, 'message-pdfs'),
       METRICS_TOKEN: 'integration-metrics-token',
       GROQ_API_KEY: '',
+      DATABASE_URL: '',
     },
   });
 

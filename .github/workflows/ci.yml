@@ -25,14 +25,14 @@ jobs:
         run: npm ci
       - name: Installer interface
         run: npm ci --prefix frontend
+      - name: Compiler interface
+        run: npm run build --prefix frontend
       - name: Tester securite
         run: npm test
       - name: Verifier syntaxe serveur
         run: node --check server.js
       - name: Controler interface
         run: npm run lint --prefix frontend
-      - name: Compiler interface
-        run: npm run build --prefix frontend
       - name: Auditer serveur
         run: npm audit --omit=dev --audit-level=moderate
       - name: Auditer interface
