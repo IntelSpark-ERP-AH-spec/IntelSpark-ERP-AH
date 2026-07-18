@@ -410,13 +410,14 @@ test('production server supports one hundred authenticated users', { timeout: 60
       { id: randomUUID(), username: 'schedule_accountant', role: 'comptable' },
       { id: randomUUID(), username: 'supervised_session_target', role: 'employe' },
     ];
+    const sharedAdminUser = { id: randomUUID(), username: 'shared_admin', role: 'admin' };
     const database = new Database(databasePath);
     database.pragma('busy_timeout = 10000');
     const insertUser = database.prepare(
       'INSERT INTO users (id, username, password, role, department, full_name, active, token_version) VALUES (?, ?, ?, ?, ?, ?, 1, 0)'
     );
     database.transaction(() => {
-      for (const user of [...capacityUsers, ...stockRoleUsers]) {
+      for (const user of [...capacityUsers, ...stockRoleUsers, sharedAdminUser]) {
         insertUser.run(user.id, user.username, 'integration-password-unused', user.role, 'operations', user.username);
       }
       const productId = randomUUID();
@@ -446,6 +447,39 @@ test('production server supports one hundred authenticated users', { timeout: 60
     });
     const capacityTokens = capacityUsers.map(signUserToken);
     const [commercialToken, magasinierToken, accountantToken, supervisedTargetToken] = stockRoleUsers.map(signUserToken);
+    const sharedAdminToken = signUserToken(sharedAdminUser);
+
+    const saveSharedAdminBranding = await fetch(`${baseUrl}/api/data/save`, {
+      method: 'POST',
+      headers: writeHeaders,
+      body: JSON.stringify({
+        is_company_name: 'IntelSpark ERP-AH',
+        is_logo: 'data:image/png;base64,shared-logo',
+        is_brands: [{ name: 'Marque partagee', logo: 'data:image/png;base64,brand-logo' }],
+      }),
+    });
+    assert.equal(saveSharedAdminBranding.status, 200, output);
+    const sharedAdminLoad = await fetch(`${baseUrl}/api/data/load`, {
+      headers: { authorization: `Bearer ${sharedAdminToken}`, origin: 'https://erp.test' },
+    });
+    assert.equal(sharedAdminLoad.status, 200, output);
+    const sharedAdminData = await sharedAdminLoad.json();
+    assert.equal(sharedAdminData.is_company_name, 'IntelSpark ERP-AH');
+    assert.equal(sharedAdminData.is_logo, 'data:image/png;base64,shared-logo');
+    assert.deepEqual(sharedAdminData.is_brands, [{ name: 'Marque partagee', logo: 'data:image/png;base64,brand-logo' }]);
+
+    const secondaryAdminWrite = await fetch(`${baseUrl}/api/data/doc/admin_sync_probe`, {
+      method: 'PUT',
+      headers: {
+        ...writeHeaders,
+        authorization: `Bearer ${sharedAdminToken}`,
+      },
+      body: JSON.stringify({ writer: 'secondary-admin' }),
+    });
+    assert.equal(secondaryAdminWrite.status, 200, output);
+    const primaryAdminRead = await fetch(`${baseUrl}/api/data/doc/admin_sync_probe`, { headers: profileHeaders });
+    assert.equal(primaryAdminRead.status, 200, output);
+    assert.deepEqual(await primaryAdminRead.json(), { writer: 'secondary-admin' });
 
     const commercialSiteAgent = await fetch(`${baseUrl}/api/site-agent`, {
       headers: { authorization: `Bearer ${commercialToken}`, origin: 'https://erp.test' },

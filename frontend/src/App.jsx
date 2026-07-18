@@ -3431,7 +3431,8 @@ export default function App() {
 
   useEffect(() => {
     if (!user || mounted.current) return;
-    const alreadyLoaded = localStorage.getItem('is_server_loaded');
+    const serverLoadKey = `is_server_loaded_v2_${user.id}`;
+    const alreadyLoaded = sessionStorage.getItem(serverLoadKey);
     if (alreadyLoaded) { mounted.current = true; return; }
     loadData().then(serverData => {
       if (serverData && typeof serverData === 'object') {
@@ -3457,7 +3458,7 @@ export default function App() {
           } catch {}
         }
       }
-      localStorage.setItem('is_server_loaded', '1');
+      sessionStorage.setItem(serverLoadKey, '1');
       mounted.current = true;
       window.location.reload();
     });

@@ -77,6 +77,16 @@ function teamKeyFor(user) {
   return String(user.department || user.role || 'general').trim().toLowerCase();
 }
 
+function dataOwnerId(user, key = '') {
+  if (user?.role !== 'admin') return user.id;
+  if (key === 'ui_session_state' || key === 'user_preferences') return user.id;
+  const primaryAdmin = dbGet(`SELECT id FROM users
+    WHERE role = 'admin'
+    ORDER BY CASE WHEN lower(username) = 'admin' THEN 0 ELSE 1 END, created_at, id
+    LIMIT 1`);
+  return primaryAdmin?.id || user.id;
+}
+
 // ── Legacy : save / load complets ────────────────────────────────────────────
 router.post('/save', async (req, res) => {
   try {
@@ -91,10 +101,11 @@ router.post('/save', async (req, res) => {
       const jsonStr = JSON.stringify(v);
       if (jsonStr.length > MAX_VALUE_BYTES) return res.status(400).json({ error: `Valeur trop grande pour: ${k}` });
     }
+    const ownerId = dataOwnerId(req.user);
     dbTransaction(() => {
-      for (const [key, value] of Object.entries(data)) setDocument(req.user.id, key, value);
+      for (const [key, value] of Object.entries(data)) setDocument(ownerId, key, value);
     });
-    res.json({ success: true });
+    res.json({ success: true, scope: req.user.role === 'admin' ? 'admin_shared' : 'user' });
   } catch (e) {
     console.error('[user_data /save]', e);
     res.status(500).json({ error: e.message });
@@ -103,8 +114,9 @@ router.post('/save', async (req, res) => {
 
 router.get('/load', async (req, res) => {
   try {
-    const map = await getUserMap(req.user.id);
-    for (const row of dbQuery('SELECT key, value_json FROM user_documents WHERE user_id = ?', [req.user.id])) {
+    const ownerId = dataOwnerId(req.user);
+    const map = await getUserMap(ownerId);
+    for (const row of dbQuery('SELECT key, value_json FROM user_documents WHERE user_id = ?', [ownerId])) {
       map[row.key] = parseStoredJson(row.value_json);
     }
     res.json(map);
@@ -118,11 +130,12 @@ router.get('/load', async (req, res) => {
 router.get('/doc/:key', async (req, res) => {
   try {
     if (!KEY_RE.test(req.params.key)) return res.status(400).json({ error: 'Clé invalide' });
-    const stored = getDocument(req.user.id, req.params.key);
+    const ownerId = dataOwnerId(req.user, req.params.key);
+    const stored = getDocument(ownerId, req.params.key);
     if (stored !== undefined) return res.json(stored);
-    const legacyMap = await getUserMap(req.user.id);
+    const legacyMap = await getUserMap(ownerId);
     const legacyValue = legacyMap[req.params.key];
-    if (legacyValue !== undefined) setDocument(req.user.id, req.params.key, legacyValue);
+    if (legacyValue !== undefined) setDocument(ownerId, req.params.key, legacyValue);
     res.json(legacyValue !== undefined ? legacyValue : null);
   } catch (e) {
     console.error('[user_data /doc GET]', e);
@@ -137,8 +150,9 @@ router.put('/doc/:key', async (req, res) => {
     const jsonStr = JSON.stringify(value);
     if (jsonStr.length > MAX_VALUE_BYTES) return res.status(400).json({ error: 'Valeur trop grande' });
 
-    setDocument(req.user.id, req.params.key, value);
-    res.json({ success: true });
+    const ownerId = dataOwnerId(req.user, req.params.key);
+    setDocument(ownerId, req.params.key, value);
+    res.json({ success: true, scope: ownerId === req.user.id ? 'user' : 'admin_shared' });
   } catch (e) {
     console.error('[user_data /doc PUT]', e);
     res.status(500).json({ error: e.message });
@@ -148,7 +162,8 @@ router.put('/doc/:key', async (req, res) => {
 router.delete('/doc/:key', async (req, res) => {
   try {
     if (!KEY_RE.test(req.params.key)) return res.status(400).json({ error: 'Clé invalide' });
-    dbRun('DELETE FROM user_documents WHERE user_id = ? AND key = ?', [req.user.id, req.params.key]);
+    const ownerId = dataOwnerId(req.user, req.params.key);
+    dbRun('DELETE FROM user_documents WHERE user_id = ? AND key = ?', [ownerId, req.params.key]);
     res.json({ success: true });
   } catch (e) {
     console.error('[user_data /doc DELETE]', e);

@@ -25,22 +25,24 @@ export function AuthProvider({ children }) {
     const data = await api.login(username, password);
     if (data.token) setAuthToken(data.token);
     const u = data.user || data;
+    sessionStorage.removeItem(`is_server_loaded_v2_${u.id}`);
     setUser(u);
     return u;
   }, []);
 
   const logout = useCallback(async () => {
     try { await api.logout(); } catch {}
+    if (user?.id) sessionStorage.removeItem(`is_server_loaded_v2_${user.id}`);
     setAuthToken(null);
     setUser(null);
-  }, []);
+  }, [user?.id]);
 
   const hasRole = (...roles) => user && roles.includes(user.role);
   const hasDept = (...depts) => user && depts.includes(user.department);
 
   const saveData = useCallback(async (data) => {
     try {
-      await fetch('/api/data/save', {
+      const res = await fetch('/api/data/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -49,7 +51,10 @@ export function AuthProvider({ children }) {
         body: JSON.stringify(data),
         credentials: 'same-origin',
       });
-    } catch {}
+      return res.ok;
+    } catch {
+      return false;
+    }
   }, []);
 
   const loadData = useCallback(async () => {
