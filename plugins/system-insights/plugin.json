@@ -1,0 +1,12 @@
+{
+  "id": "system-insights",
+  "name": "System Insights",
+  "version": "1.0.0",
+  "description": "Indicateurs opérationnels administratifs",
+  "enabled": true,
+  "actions": {
+    "summary": {
+      "roles": ["admin", "financier"]
+    }
+  }
+}

@@ -1,0 +1,74 @@
+/* Le réglage typographique utilisateur gouverne chaque texte applicatif. */
+@media screen {
+  #root .app-root,
+  #root .app-root *:not(svg):not(path) {
+    font-family: var(--user-font-family, "Segoe UI", sans-serif) !important;
+    font-size: var(--user-font-size, 14px) !important;
+    color: var(--user-text-color, #111827) !important;
+  }
+
+  #root .app-root :is(
+    h1,h2,h3,h4,h5,h6,p,span,strong,small,label,legend,
+    button,a,input,select,textarea,option,th,td,li,time,
+    .cd-text,.cd-name,.cd-role,.cd-snippet,.cd-time,
+    .app-toast,.fleetparts-nav-section,.fleetparts-menu-search
+  ) {
+    font-family: var(--user-font-family, "Segoe UI", sans-serif) !important;
+    font-size: var(--user-font-size, 14px) !important;
+    color: var(--user-text-color, #111827) !important;
+  }
+
+  #root .app-root :is(input,select,textarea,option) {
+    color: var(--user-text-color, #111827) !important;
+    -webkit-text-fill-color: var(--user-text-color, #111827) !important;
+  }
+  #root .app-root :is(input,textarea)::placeholder {
+    color: var(--user-text-color, #111827) !important;
+    -webkit-text-fill-color: var(--user-text-color, #111827) !important;
+    opacity: .58 !important;
+  }
+  #root .app-root *::before,
+  #root .app-root *::after {
+    color: var(--user-text-color, #111827) !important;
+  }
+
+  #root .app-root[data-theme-mode="slideshow"],
+  #root .app-root[data-theme-mode="slideshow"] .fleetparts-main {
+    background: var(--app-bg) !important;
+    transition: background 900ms ease !important;
+  }
+  #root .app-root[data-theme-mode="slideshow"] :is(
+    .fleetparts-topbar,.fleetparts-sidebar-open,.fleetparts-page-heading,
+    section,article,.module-page-surface,.settings-workspace,.settings-content
+  ) {
+    background-color: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    transition: background-color 900ms ease, border-color 900ms ease !important;
+  }
+  #root .app-root[data-theme-mode="slideshow"] :is(
+    .fleetparts-topbar,.fleetparts-sidebar-open,.settings-nav,
+    thead th,.role-home-actions button
+  ) {
+    background-color: var(--app-surface-muted) !important;
+  }
+  #root .app-root[data-theme-mode="slideshow"] :is(
+    .settings-nav button.is-active,.primary,.users-primary
+  ) {
+    background-color: var(--app-accent) !important;
+    border-color: var(--app-accent) !important;
+  }
+}
+/* Tableaux de suivi compacts. */
+.app-root table.compact-history-table {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.app-root table.compact-history-table th {
+  height: 34px !important;
+  padding: 5px 7px !important;
+}
+
+.app-root table.compact-history-table td {
+  padding: 5px 7px !important;
+}

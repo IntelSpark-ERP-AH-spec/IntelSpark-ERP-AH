@@ -1,0 +1,30 @@
+groups:
+  - name: intelsheets
+    rules:
+      - alert: IntelsheetsUnavailable
+        expr: up{job="intelsheets"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Application Intelsheets indisponible
+      - alert: IntelsheetsMemoryHigh
+        expr: intelsheets_memory_rss_bytes > 1073741824
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Memoire Intelsheets elevee
+      - alert: IntelsheetsEventLoopSlow
+        expr: intelsheets_event_loop_delay_max_ms > 250
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Boucle evenement Intelsheets ralentie
+      - alert: IntelsheetsServerErrors
+        expr: increase(intelsheets_http_errors_total[5m]) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: Erreurs serveur Intelsheets nombreuses

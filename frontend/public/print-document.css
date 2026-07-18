@@ -1,0 +1,175 @@
+@page { size: A4 portrait; margin: 0; }
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  width: 210mm;
+  height: 297mm;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #fff;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #20252d;
+  font-size: 7.2pt;
+  line-height: 1.2;
+}
+
+.sheet {
+  width: 210mm;
+  height: 297mm;
+  padding: 5mm 8mm 4mm;
+  display: grid;
+  grid-template-rows: 38mm 10mm 14mm 155mm 26mm 18mm 22mm;
+  gap: .5mm;
+  overflow: hidden;
+  background: #fff;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: 22% 40% 38%;
+  grid-template-rows: 38mm;
+  width: 100%;
+  height: 38mm;
+  align-items: start;
+  border-bottom: .35mm solid #8f98a3;
+  overflow: hidden;
+}
+
+.logo { display: grid; place-items: start start; }
+.company-logo { display: block; width: 38mm; height: 24mm; object-fit: contain; object-position: left top; }
+.logo-placeholder { margin-top: 3mm; font-size: 8pt; font-weight: 700; }
+.company,
+.client { padding: 2mm 2.5mm; overflow: hidden; }
+.company { padding-left: .5mm; }
+article.sheet .head {
+  grid-template-columns: 22% 40% 38%;
+  grid-template-rows: 38mm;
+  width: 100%;
+  height: 38mm;
+  align-items: stretch;
+}
+article.sheet .head > .logo,
+article.sheet .head > .company,
+article.sheet .head > .client {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  padding: 0 2mm 2mm;
+  align-self: start;
+  overflow: hidden;
+}
+article.sheet .head > .logo { display: grid; place-items: start start; }
+article.sheet .head > .company { padding-left: .5mm; }
+article.sheet .head > .company,
+article.sheet .head > .client { display: grid; align-content: start; justify-items: start; }
+.company strong,
+.client strong { display: block; margin-bottom: 1.5mm; font-size: 8.5pt; line-height: 1.05; text-transform: uppercase; }
+.company span,
+.client div,
+.client span { display: block; margin-bottom: 1mm; font-size: 7.4pt; }
+.client div { font-weight: 700; line-height: 1.3; }
+
+.title { display: grid; place-items: center; font-size: 9pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.meta { display: grid; grid-template-columns: 1fr 1fr; border: .25mm solid #aab1ba; }
+.meta-cell { padding: 2mm 2.5mm; border-right: .25mm solid #aab1ba; overflow: hidden; }
+.meta-cell:last-child { border-right: 0; }
+.meta-cell strong { display: block; margin-bottom: 1.5mm; font-size: 7.5pt; text-transform: uppercase; }
+.meta-cell span { font-size: 7.2pt; }
+
+.items { width: 100%; height: 155mm; table-layout: fixed; border-collapse: collapse; border: .25mm solid #aab1ba; font-variant-numeric: tabular-nums; }
+.items col:nth-child(1) { width: 17%; }
+.items col:nth-child(2) { width: 33%; }
+.items col:nth-child(3) { width: 8%; }
+.items col:nth-child(4) { width: 16%; }
+.items col:nth-child(5) { width: 11%; }
+.items col:nth-child(6) { width: 15%; }
+.items th,
+.items td { border: .22mm solid #b3bac3; padding: 1mm 1.2mm; text-align: center; vertical-align: middle; overflow: hidden; }
+.items thead tr { height: 8mm; }
+.items th { font-size: 6.6pt; font-weight: 800; white-space: nowrap; }
+.items td { font-size: 6.8pt; }
+.items .ref { font-family: Consolas, monospace; }
+.items .amount { font-weight: 800; }
+.items .blank td { padding: 0; }
+
+.summary { display: grid; grid-template-columns: 40% 24% 36%; gap: .6mm; border: 0; overflow: hidden; }
+.box { min-width: 0; padding: 1.7mm 3mm 1mm; border: .25mm solid #c4c9cf; border-radius: 1mm; overflow: hidden; }
+.box:last-child { border: .25mm solid #c4c9cf; }
+.sum-title { display: block; margin-bottom: 1mm; text-align: center; font-size: 7.4pt; font-weight: 900; text-transform: uppercase; }
+.methods { display: flex; justify-content: center; gap: 2.2mm; margin: 1mm 0 .8mm; white-space: nowrap; }
+.choice { display: inline-flex; align-items: center; gap: .6mm; font-size: 6.7pt; }
+.radio {
+  width: 2.6mm;
+  height: 2.6mm;
+  border: .28mm solid #6b7280;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+  box-sizing: border-box;
+  background: #fff;
+}
+.radio.selected { border-color: #1377b7; background: #fff; }
+.radio-dot {
+  display: block;
+  width: 1.7mm;
+  height: 1.7mm;
+  border: .85mm solid #1377b7;
+  border-radius: 50%;
+  box-sizing: border-box;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.sum-line { display: flex; justify-content: space-between; gap: 2mm; min-height: 4.1mm; align-items: center; font-size: 6.8pt; font-variant-numeric: tabular-nums; }
+.sum-line strong { font-weight: 800; white-space: nowrap; }
+.tax { display: grid; align-content: center; }
+.net { margin: .4mm -1.5mm 0; padding: .8mm 1.5mm 0; border-top: .3mm solid #8f98a3; background: #f7f7f5; font-size: 7.2pt; font-weight: 900; text-transform: uppercase; }
+
+/* Reproduction fidèle du bloc inférieur fourni : paiement, taxes, montants. */
+article.sheet .summary { grid-template-columns: 40% 24% 36%; gap: .6mm; border: 0; }
+article.sheet .summary .box { padding: 1.7mm 3mm 1mm; border: .25mm solid #c4c9cf; }
+.payment-box .sum-line { display: grid; grid-template-columns: max-content max-content; justify-content: center; column-gap: 4mm; }
+.tax-box .sum-line,
+.amounts-box .sum-line { display: grid; grid-template-columns: minmax(0, 1fr) max-content; column-gap: 3mm; }
+.tax-box { padding-inline: 4mm !important; }
+.amounts-box { padding: 1.2mm 2.5mm 0 !important; }
+.amounts-box .net { margin-inline: -1.5mm; padding-inline: 1.5mm; }
+
+.legal {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  margin: .8mm 8mm;
+  padding: 1.5mm 3mm;
+  border: .25mm solid #c4c9cf;
+  border-radius: 1.5mm;
+  text-align: center;
+  overflow: hidden;
+}
+.legal strong { display: block; margin-bottom: 1mm; font-size: 7.2pt; }
+.legal div {
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  font-size: 6.7pt;
+  line-height: 1.3;
+}
+.brands { margin: .8mm 8mm 0; padding: 1mm 2mm; border: .25mm solid #c4c9cf; border-radius: 1.5mm; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; align-items: center; gap: 1mm 2mm; overflow: hidden; background: #fff; }
+.brand { flex: 0 0 calc((100% - 14mm) / 8); max-width: calc((100% - 14mm) / 8); height: 8mm; display: grid; place-items: center; overflow: hidden; }
+.brand img { display: block; width: 100%; height: 8mm; object-fit: contain; }
+.word { font-size: 8pt; font-weight: 900; letter-spacing: -.04em; color: #364152; }
+.w1 { font-style: italic; }
+.w2 { letter-spacing: .04em; }
+.w3 { border: .25mm solid #64748b; border-radius: 50%; font-size: 6.6pt; }

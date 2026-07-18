@@ -1,0 +1,61 @@
+/* Verrou final: tous thèmes et toutes pages utilisent une base blanche. */
+@media screen {
+  html,body,#root{background:#fff!important;color:#111827!important;color-scheme:light!important}
+  .app-root{--app-bg:#fff!important;--app-surface:#fff!important;--app-surface-muted:#f8fafc!important;--app-border:#d9dde3!important;background:#fff!important;color-scheme:light!important}
+  .app-root :is(.fleetparts-main,.fleetparts-topbar,.fleetparts-sidebar-open,.fleetparts-page-heading,section,article,.module-page-surface,.settings-workspace,.settings-content,.users-directory,.role-home-panel,.app-toast,.cd-drawer,.cd-header,.cd-tabs,.cd-chat-head,.cd-input,.cd-email){background-color:#fff!important;color:#111827!important;border-color:#d9dde3!important}
+  .app-root :is(h1,h2,h3,h4,h5,h6,p,label,strong,small,li,td,legend){color:#111827!important}
+  .app-root :is(span,div,a){color:#111827}
+  .app-root :is(input,select,textarea){background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;border-color:#b7bec8!important}
+  .app-root :is(input,textarea)::placeholder{color:#6b7280!important;-webkit-text-fill-color:#6b7280!important}
+  .app-root table{background:#fff!important;color:#111827!important;border-color:#d9dde3!important}
+  .app-root thead th{background:#f3f4f6!important;color:#374151!important;border-color:#d9dde3!important}
+  .app-root tbody td{background:#fff!important;color:#111827!important;border-color:#e5e7eb!important}
+  .app-root tbody tr:nth-child(even) td{background:#f8fafc!important}
+  .app-root :is(.settings-nav,.role-home-actions){background:#f8fafc!important;border-color:#d9dde3!important}
+  .app-root :is(.settings-nav button,.fleetparts-sidebar-open button,button:not(.primary):not(.users-primary):not(.is-danger)){background:#fff!important;color:#111827!important;border-color:#b7bec8!important}
+  .app-root :is(.settings-nav button.is-active,.fleetparts-sidebar-open button:hover){background:#f3f4f6!important;color:#111827!important}
+  .app-root :is(.fleetparts-heading-status,.role-home-status){background:#fff!important;color:#166534!important;border-color:#d1d5db!important}
+
+  .login-shell.login-shell{display:grid;background:#fff!important;color:#111827!important}
+  .login-shell .login-panel,.login-shell .login-brand{background:#fff!important;color:#111827!important;border-color:#e5e7eb!important}
+  .login-shell .login-card h2,.login-shell .login-brand h1,.login-shell .login-brand-name{color:#111827!important}
+  .login-shell :is(.login-subtitle,.login-brand p,.login-hint){color:#64748b!important}
+  .login-shell .login-role-grid button{background:#fff!important;color:#111827!important;border-color:#d1d5db!important}
+  .login-shell .login-role-grid button:is(:hover,.is-active){background:#f3f4f6!important;color:#111827!important;border-color:#111827!important}
+  .login-shell .login-field span{color:#111827!important}
+  .login-shell .login-field input,.login-shell .login-field input:focus{background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;border-color:#b7bec8!important}
+  .login-shell .login-field input:focus{border-color:#111827!important}
+  .login-shell :is(.login-brand h1 em,.login-brand__eyebrow){color:#111827!important}
+  .login-shell :is(.login-submit,.login-brand-name i){background:#111827!important;color:#fff!important;border-color:#111827!important}
+  .login-shell .login-submit span{color:#fff!important}
+
+  /* Items sans encadrement */
+  .app-root :is(
+    .fleetparts-sidebar-open button,
+    .settings-nav button,
+    .session-home-grid button,
+    .role-home-actions button,
+    .role-home-action-mark,
+    .cd-item,
+    .settings-theme-grid button
+  ){
+    border:0!important;
+    box-shadow:none!important;
+    outline-offset:2px;
+  }
+  .app-root :is(.fleetparts-sidebar-open button,.settings-nav button,.role-home-actions button,.cd-item):hover{
+    background:#f3f4f6!important;
+  }
+  .app-root :is(.fleetparts-sidebar-open button,.settings-nav button).is-active{
+    background:#eef0f3!important;
+    border:0!important;
+  }
+}
+
+/* Retour visuel universel après chaque clic. */
+@media screen {
+  :is(button,a,[role="button"],.cd-row){position:relative;transition:box-shadow .14s ease!important}
+  :is(button,a,[role="button"],.cd-row).ui-clicked{box-shadow:0 0 0 2px #64748b!important}
+  :is(button,a,[role="button"],.cd-row):focus-visible{outline:2px solid #64748b!important;outline-offset:2px!important}
+  .fleetparts-sidebar-open button.is-active,.settings-nav button.is-active,.cd-tab.a{background:#e5e7eb!important;font-weight:800!important;box-shadow:inset 3px 0 0 #111827!important}
+}

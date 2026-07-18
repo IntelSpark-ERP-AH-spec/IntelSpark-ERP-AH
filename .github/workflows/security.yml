@@ -1,0 +1,68 @@
+name: Analyse securite dynamique
+
+on:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix frontend
+      - run: npm run build --prefix frontend
+      - name: Demarrer application isolee
+        env:
+          NODE_ENV: production
+          PORT: 3001
+          JWT_SECRET: ci-jwt-secret-with-more-than-thirty-two-characters
+          DATA_ENCRYPTION_KEY: ci-data-secret-with-more-than-thirty-two-characters
+          ADMIN_PASSWORD: CiAdminPassword!2026
+          ALLOWED_ORIGINS: http://127.0.0.1:3001
+          FORCE_HTTPS: "false"
+          DB_PATH: /tmp/intelsheets-security.db
+          BACKUP_DIR: /tmp/intelsheets-backups
+        run: |
+          node server.js >/tmp/intelsheets.log 2>&1 &
+          echo $! >/tmp/intelsheets.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3001/api/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/intelsheets.log
+          exit 1
+      - name: Scanner OWASP ZAP
+        run: |
+          docker run --rm --network host \
+            -v "${{ github.workspace }}:/zap/wrk/:rw" \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://127.0.0.1:3001 \
+            -I -T 5 -r zap-report.html -J zap-report.json
+      - name: Publier rapports ZAP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-report
+          path: |
+            zap-report.html
+            zap-report.json
+          if-no-files-found: warn
+      - name: Afficher journaux serveur
+        if: failure()
+        run: cat /tmp/intelsheets.log

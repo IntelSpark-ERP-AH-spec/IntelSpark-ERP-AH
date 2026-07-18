@@ -1,0 +1,9 @@
+.system-confirm-overlay{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.52);backdrop-filter:blur(5px)}
+.system-confirm-dialog{width:min(460px,calc(100vw - 32px));display:grid;grid-template-columns:48px minmax(0,1fr);gap:14px;padding:22px;border:1px solid #d9e5e9;border-radius:18px;background:#fff;box-shadow:0 28px 80px rgba(15,23,42,.3);box-sizing:border-box;font-family:Inter,"Segoe UI",system-ui,sans-serif}
+.system-confirm-mark{width:48px;height:48px;display:grid;place-items:center;border-radius:14px;background:#e9f8f3;color:#067568;font-size:24px;font-weight:900}
+.system-confirm-dialog.danger .system-confirm-mark{background:#fff1f2;color:#d92d3a}
+.system-confirm-copy{min-width:0}.system-confirm-copy h2{margin:1px 0 8px;color:#17212b;font-size:18px;line-height:1.25}.system-confirm-copy p{margin:0;color:#5c6f79;font-size:13px;line-height:1.55;white-space:pre-line}
+.system-confirm-actions{grid-column:1/3;display:flex;justify-content:flex-end;gap:9px;margin-top:6px}.system-confirm-actions button{height:42px;padding:0 18px;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer}
+.system-confirm-cancel{border:1px solid #c8d4da;background:#fff;color:#344451}.system-confirm-cancel:hover{background:#f4f7f8}
+.system-confirm-accept{border:0;background:#067568;color:#fff;box-shadow:0 6px 16px rgba(6,117,104,.22)}.system-confirm-accept:hover{background:#045f55}.system-confirm-dialog.danger .system-confirm-accept{background:#e43d47;box-shadow:0 6px 16px rgba(228,61,71,.22)}.system-confirm-dialog.danger .system-confirm-accept:hover{background:#c92f39}
+@media(max-width:520px){.system-confirm-dialog{grid-template-columns:42px minmax(0,1fr);gap:12px;padding:18px}.system-confirm-mark{width:42px;height:42px}.system-confirm-actions{justify-content:stretch}.system-confirm-actions button{flex:1;padding:0 10px}}

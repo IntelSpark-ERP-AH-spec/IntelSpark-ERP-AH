@@ -1,0 +1,88 @@
+/* Communication: Gmail pour courriels, WhatsApp/Telegram pour messages. */
+@media screen {
+  .app-root .cd-overlay{background:rgba(15,23,42,.3)!important;backdrop-filter:blur(3px)!important}
+  .app-root .cd-drawer{width:min(1040px,100vw)!important;background:#fff!important;border-left:1px solid #d9dee7!important;box-shadow:-20px 0 60px rgba(15,23,42,.18)!important;color:#172033!important;font-family:Inter,ui-sans-serif,system-ui,sans-serif!important}
+  .app-root .cd-header{height:68px!important;padding:0 20px!important;background:#fff!important;border-bottom:1px solid #e3e7ee!important}
+  .app-root .cd-header h3{font-size:20px!important;font-weight:750!important;color:#172033!important}
+  .app-root .cd-close,.app-root .cd-back{width:38px!important;height:38px!important;border:0!important;border-radius:50%!important;background:transparent!important;color:#475569!important;font-size:24px!important}
+  .app-root .cd-close:hover,.app-root .cd-back:hover{background:#eef2f6!important}
+  .app-root .cd-tabs{height:50px!important;background:#fff!important;border-bottom:1px solid #e3e7ee!important;padding:0 20px!important;gap:24px!important}
+  .app-root .cd-tab{height:50px!important;padding:0 4px!important;background:transparent!important;border:0!important;border-radius:0!important;color:#64748b!important;font-size:14px!important;font-weight:700!important}
+  .app-root .cd-tab.a{color:#0f6f5c!important;border-bottom:3px solid #0f8f75!important}
+  .app-root .cd-tab:last-child.a{color:#b3261e!important;border-bottom-color:#c5221f!important}
+  .app-root .cd-body{background:#f8fafc!important}
+
+  /* WhatsApp / Telegram */
+  .app-root .cd-list{background:#fff!important}
+  .app-root .cd-list-top{padding:14px 16px!important;border-bottom:1px solid #edf0f4!important}
+  .app-root .cd-new-btn{width:100%!important;height:42px!important;border:0!important;border-radius:10px!important;background:#0f8f75!important;color:#fff!important;font-size:14px!important;font-weight:750!important}
+  .app-root .cd-row{min-height:72px!important;padding:10px 16px!important;border:0!important;border-bottom:1px solid #eef1f5!important;background:#fff!important;cursor:pointer!important}
+  .app-root .cd-row:hover{background:#f5f8fa!important}
+  .app-root .cd-av{width:48px!important;height:48px!important;border:0!important;border-radius:50%!important;color:#fff!important;font-weight:800!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)!important}
+  .app-root .cd-dot{background:#22c55e!important;border:2px solid #fff!important}
+  .app-root .cd-name{color:#172033!important;font-size:15px!important;font-weight:750!important}
+  .app-root .cd-time,.app-root .cd-role,.app-root .cd-snippet{color:#7b8798!important}
+  .app-root .cd-unread{background:#25a98b!important;color:#fff!important}
+  .app-root .cd-pick-label{padding:12px 16px 7px!important;background:#f8fafc!important;color:#0f8f75!important;font-size:11px!important;font-weight:800!important;letter-spacing:.08em!important;text-transform:uppercase!important}
+  .app-root .cd-search{padding:10px 16px!important;background:#fff!important;border-bottom:1px solid #e5e9ef!important}
+  .app-root .cd-search input{height:40px!important;border:0!important;border-radius:20px!important;background:#eef2f6!important;color:#172033!important;padding:0 16px!important}
+  .app-root .cd-msgs{padding:20px 24px!important;background-color:#efeae2!important;background-image:radial-gradient(rgba(15,143,117,.07) 1px,transparent 1px)!important;background-size:18px 18px!important}
+  .app-root .cd-date span{padding:5px 10px!important;border:0!important;border-radius:8px!important;background:rgba(255,255,255,.86)!important;color:#64748b!important;box-shadow:0 1px 3px rgba(15,23,42,.08)!important}
+  .app-root .cd-msg{margin:5px 0!important}
+  .app-root .cd-av-s{width:30px!important;height:30px!important;border-radius:50%!important;color:#fff!important}
+  .app-root .cd-text{max-width:560px!important;padding:9px 12px 20px!important;border:0!important;border-radius:5px 14px 14px 14px!important;background:#fff!important;color:#172033!important;font-size:14px!important;font-weight:450!important;line-height:1.45!important;box-shadow:0 1px 2px rgba(15,23,42,.14)!important}
+  .app-root .cd-msg.me .cd-text{border-radius:14px 5px 14px 14px!important;background:#d9fdd3!important;color:#172033!important}
+  .app-root .cd-sender{color:#1677b8!important;font-size:12px!important;font-weight:800!important}
+  .app-root .cd-text::after{color:#77828f!important}
+  .app-root .cd-input{padding:10px 14px!important;background:#f0f2f5!important;border-top:1px solid #dce1e7!important;gap:8px!important}
+  .app-root .cd-input input{height:44px!important;border:0!important;border-radius:22px!important;background:#fff!important;color:#172033!important;padding:0 18px!important}
+  .app-root .cd-action{width:42px!important;height:42px!important;border:0!important;border-radius:50%!important;background:transparent!important;color:#657180!important;font-size:19px!important}
+  .app-root .cd-send{width:42px!important;height:42px!important;border:0!important;border-radius:50%!important;background:#168bd2!important;color:#fff!important;font-size:18px!important}
+  .app-root .cd-send:disabled{background:#aab4c0!important;color:#fff!important}
+  .app-root .cd-doc-bar{background:#f0f2f5!important;border-color:#dce1e7!important}
+
+  /* Gmail */
+  .app-root .cd-email{padding:0!important;gap:0!important;background:#f6f8fc!important;border:0!important;border-radius:0!important}
+  .app-root .cd-mail-nav{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:0!important;margin:0!important;padding:10px 16px!important;background:#fff!important;border-bottom:1px solid #e4e8ef!important}
+  .app-root .cd-mail-nav button{height:40px!important;border:0!important;border-radius:0!important;background:#fff!important;color:#5f6368!important;font-size:13px!important;font-weight:700!important}
+  .app-root .cd-mail-nav button.a{background:#fce8e6!important;color:#b3261e!important;border-radius:20px!important}
+  .app-root .cd-mail-sync{width:auto!important;align-self:flex-end!important;margin:12px 16px!important;padding:0 16px!important;height:36px!important;border:1px solid #d6dbe3!important;border-radius:18px!important;background:#fff!important;color:#3c4043!important;font-size:12px!important;font-weight:700!important}
+  .app-root .cd-mail-list{display:grid!important;gap:0!important;margin:0 16px 16px!important;overflow:auto!important;border:1px solid #e1e5eb!important;border-radius:12px!important;background:#fff!important}
+  .app-root .cd-mail-list article{display:grid!important;grid-template-columns:minmax(150px,.35fr) minmax(0,1fr) auto!important;align-items:center!important;gap:14px!important;min-height:52px!important;padding:9px 14px!important;border:0!important;border-bottom:1px solid #edf0f4!important;border-radius:0!important;background:#f8fafc!important;color:#202124!important;box-shadow:none!important}
+  .app-root .cd-mail-list article:hover{box-shadow:0 2px 8px rgba(60,64,67,.18)!important;position:relative!important;z-index:1!important}
+  .app-root .cd-mail-list article header{display:contents!important}.app-root .cd-mail-list article header strong{grid-column:1!important;color:#202124!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}.app-root .cd-mail-list article header time{grid-column:3!important;grid-row:1!important;color:#5f6368!important;font-size:11px!important}.app-root .cd-mail-list article>span{display:none!important}.app-root .cd-mail-list article>p{grid-column:2!important;grid-row:1!important;margin:0!important;color:#5f6368!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+  .app-root .cd-mail-list article{cursor:pointer!important;transition:background .16s ease,box-shadow .16s ease!important}
+  .app-root .cd-mail-list article:focus-visible{outline:2px solid #0b57d0!important;outline-offset:-2px!important}
+  .app-root .cd-mail-list article.unread{position:relative!important;background:#fff!important}
+  .app-root .cd-mail-list article.unread header strong,.app-root .cd-mail-list article.unread p b,.app-root .cd-mail-list article.unread time{font-weight:850!important;color:#172033!important}
+  .app-root .cd-mail-list article.unread::before{content:''!important;position:absolute!important;left:5px!important;width:6px!important;height:6px!important;border-radius:50%!important;background:#0b57d0!important}
+  .app-root .cd-mail-list article>p b{color:#202124!important;font-style:normal!important}.app-root .cd-mail-list article>p em{color:#5f6368!important;font-style:normal!important;font-weight:450!important}
+  .app-root .cd-mail-detail{display:flex!important;flex:1!important;min-height:0!important;flex-direction:column!important;margin:0 16px 16px!important;border:1px solid #e1e5eb!important;border-radius:14px!important;background:#fff!important;overflow:auto!important}
+  .app-root .cd-drawer.mail-open{width:100vw!important;max-width:100vw!important}
+  .app-root .cd-drawer.mail-open .cd-email{background:#f6f8fc!important}
+  .app-root .cd-mail-detail{margin:0!important;padding:0 24px 28px!important;border:0!important;border-radius:0!important;background:#eef2f7!important;overflow:auto!important;box-sizing:border-box!important}
+  .app-root .cd-mail-detail-toolbar{position:sticky!important;top:0!important;z-index:2!important;display:grid!important;grid-template-columns:132px minmax(0,1fr) 132px!important;align-items:center!important;gap:12px!important;min-height:58px!important;margin:0 -24px!important;padding:0 24px!important;border-bottom:1px solid #d8dee8!important;background:#fff!important;box-shadow:0 1px 3px rgba(15,23,42,.06)!important}
+  .app-root .cd-mail-detail-toolbar button{width:auto!important;height:36px!important;margin:0!important;padding:0 12px!important;border:0!important;border-radius:8px!important;background:transparent!important;color:#3c4043!important;font-size:13px!important;font-weight:750!important}
+  .app-root .cd-mail-detail-toolbar .cd-mail-back{display:inline-flex!important;width:112px!important;align-items:center!important;justify-content:center!important;gap:9px!important;padding:0 14px!important;border:1px solid #b8c4d3!important;background:#f8fafc!important;color:#172033!important}.app-root .cd-mail-detail-toolbar .cd-mail-back span{color:#172033!important;font-size:22px!important;font-weight:850!important;line-height:1!important}.app-root .cd-mail-detail-toolbar .cd-mail-back strong{color:#172033!important;font-size:13px!important;font-weight:800!important}.app-root .cd-mail-detail-toolbar button:hover{background:#edf2f7!important}.app-root .cd-mail-detail-toolbar button:active{transform:scale(.97)!important}.app-root .cd-mail-detail-toolbar button:focus-visible{outline:2px solid #0b57d0!important;outline-offset:2px!important}
+  .app-root .cd-mail-detail-toolbar>span{color:#334155!important;font-size:13px!important;font-weight:800!important;text-align:center!important}
+  .app-root .cd-mail-detail-page{display:flex!important;width:min(1080px,100%)!important;min-height:calc(100dvh - 214px)!important;flex:0 0 auto!important;flex-direction:column!important;margin:24px auto 0!important;border:2px solid #cbd5e1!important;border-radius:16px!important;background:#fff!important;box-shadow:0 14px 34px rgba(15,23,42,.12)!important;box-sizing:border-box!important;overflow:hidden!important}
+  .app-root .cd-mail-subject{padding:28px 36px 20px!important;border-bottom:1px solid #e5eaf0!important;background:#fff!important}.app-root .cd-mail-subject>div{display:flex!important;align-items:flex-start!important;gap:14px!important}.app-root .cd-mail-subject h1{flex:1!important;margin:0!important;color:#172033!important;font-size:27px!important;font-weight:650!important;line-height:1.3!important;letter-spacing:-.025em!important;text-wrap:balance!important}.app-root .cd-mail-subject b{margin-top:4px!important;padding:5px 9px!important;border-radius:999px!important;background:#e8f0fe!important;color:#174ea6!important;font-size:10px!important;font-weight:800!important}
+  .app-root .cd-mail-identity{display:grid!important;grid-template-columns:48px minmax(0,1fr) auto!important;align-items:center!important;gap:14px!important;padding:22px 36px 12px!important}.app-root .cd-mail-identity>i{display:grid!important;place-items:center!important;width:48px!important;height:48px!important;border-radius:14px!important;background:#dbe7fb!important;color:#174ea6!important;font-size:13px!important;font-style:normal!important;font-weight:850!important}.app-root .cd-mail-contact{display:flex!important;min-width:0!important;flex-direction:column!important;gap:3px!important}.app-root .cd-mail-contact strong{overflow:hidden!important;color:#172033!important;font-size:14px!important;font-weight:800!important;text-overflow:ellipsis!important;white-space:nowrap!important}.app-root .cd-mail-contact span{overflow:hidden!important;color:#64748b!important;font-size:12px!important;text-overflow:ellipsis!important;white-space:nowrap!important}.app-root .cd-mail-identity time{color:#64748b!important;font-size:11px!important;font-variant-numeric:tabular-nums!important;white-space:nowrap!important}
+  .app-root .cd-mail-metadata{display:grid!important;gap:7px!important;margin:8px 36px 0 98px!important;padding:14px 16px!important;border:1px solid #e2e8f0!important;border-radius:10px!important;background:#f8fafc!important;box-sizing:border-box!important}.app-root .cd-mail-metadata>div{display:grid!important;grid-template-columns:46px minmax(0,1fr)!important;gap:10px!important}.app-root .cd-mail-metadata dt{color:#64748b!important;font-size:11px!important;font-weight:800!important}.app-root .cd-mail-metadata dd{overflow:hidden!important;margin:0!important;color:#334155!important;font-size:12px!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+  .app-root .cd-mail-detail-page .cd-mail-content{min-height:210px!important;flex:1!important;margin:0 36px 0 98px!important;padding:30px 0 44px!important;border:0!important;color:#172033!important;font-size:15px!important;line-height:1.75!important;white-space:pre-wrap!important;overflow-wrap:anywhere!important;box-sizing:border-box!important}
+  .app-root .cd-mail-detail-actions{padding:18px 36px 22px 98px!important;border-top:1px solid #e5eaf0!important;background:#f8fafc!important}.app-root .cd-mail-detail-actions button{height:40px!important;padding:0 18px!important;border:1px solid #aebdce!important;border-radius:9px!important;background:#fff!important;color:#174ea6!important;font-size:13px!important;font-weight:750!important}.app-root .cd-mail-detail-actions button:hover{background:#eef4ff!important;border-color:#7d9ec9!important}.app-root .cd-mail-detail-actions button:focus-visible{outline:2px solid #0b57d0!important;outline-offset:2px!important}
+  .app-root .cd-email>input,.app-root .cd-email>textarea{width:auto!important;margin:0 16px!important;border:0!important;border-bottom:1px solid #e5e7eb!important;border-radius:0!important;background:#fff!important;color:#202124!important;padding:12px 14px!important}
+  .app-root .cd-email>input:first-of-type{border-radius:12px 12px 0 0!important}
+  .app-root .cd-email>textarea{min-height:260px!important;resize:vertical!important;border-radius:0 0 12px 12px!important}
+  .app-root .cd-email>button:last-child{align-self:flex-start!important;margin:14px 16px 18px!important;height:40px!important;padding:0 24px!important;border:0!important;border-radius:20px!important;background:#0b57d0!important;color:#fff!important;font-weight:750!important}
+  .app-root .cd-empty{color:#64748b!important}
+
+  @media(max-width:720px){.app-root .cd-drawer{width:100vw!important}.app-root .cd-msgs{padding:14px!important}.app-root .cd-mail-list{margin-inline:8px!important}.app-root .cd-mail-list article{grid-template-columns:1fr auto!important}.app-root .cd-mail-list article>p{grid-column:1/3!important;grid-row:2!important}.app-root .cd-email>input,.app-root .cd-email>textarea{margin-inline:8px!important}.app-root .cd-mail-detail{padding:0 8px 12px!important}.app-root .cd-mail-detail-toolbar{margin-inline:-8px!important;padding-inline:10px!important}.app-root .cd-mail-detail-page{width:100%!important;min-height:calc(100dvh - 184px)!important;margin:8px auto 0!important;border-width:1px!important;border-radius:12px!important;box-shadow:0 6px 18px rgba(15,23,42,.1)!important}.app-root .cd-mail-subject{padding:22px 18px 16px!important}.app-root .cd-mail-subject h1{font-size:22px!important}.app-root .cd-mail-identity{grid-template-columns:42px minmax(0,1fr)!important;padding:16px 18px 10px!important}.app-root .cd-mail-identity>i{width:42px!important;height:42px!important}.app-root .cd-mail-identity time{grid-column:2!important}.app-root .cd-mail-metadata{margin:6px 18px 0!important}.app-root .cd-mail-detail-page .cd-mail-content{margin:0 18px!important;padding:24px 0 36px!important}.app-root .cd-mail-detail-actions{padding:16px 18px 20px!important}}
+}
+
+@media screen and (max-width:720px){
+  .app-root .cd-mail-detail-toolbar{grid-template-columns:98px minmax(0,1fr) 98px!important}
+  .app-root .cd-mail-detail-toolbar .cd-mail-back{width:92px!important;padding-inline:9px!important}
+  .app-root .cd-mail-detail-toolbar .cd-mail-back strong{font-size:12px!important}
+  .app-root .cd-mail-detail-toolbar>span{font-size:11px!important}
+}

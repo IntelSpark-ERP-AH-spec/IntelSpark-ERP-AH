@@ -1,0 +1,13 @@
+erp.example.com {
+  encode zstd gzip
+  respond /api/metrics 404
+  reverse_proxy 127.0.0.1:3001
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    -Server
+  }
+  log {
+    output file /var/log/caddy/intelsheets-access.log
+    format json
+  }
+}

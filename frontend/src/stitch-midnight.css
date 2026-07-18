@@ -1,0 +1,531 @@
+/* Stitch — Obsidian Industry
+   Source: Enterprise Truck Parts Portal / Style Midnight
+   Component-scoped implementation. Print output intentionally stays light. */
+
+@media screen {
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) {
+    --st-bg: oklch(16% .005 60);
+    --st-surface: oklch(13% .005 60);
+    --st-surface-low: oklch(19% .006 60);
+    --st-surface-mid: oklch(19% .006 60);
+    --st-surface-high: oklch(22% .006 60);
+    --st-surface-top: oklch(24% .008 60);
+    --st-text: oklch(96% .01 90);
+    --st-muted: oklch(72% .02 85);
+    --st-outline: oklch(100% 0 0 / .08);
+    --st-outline-strong: oklch(100% 0 0 / .16);
+    --st-gold: oklch(78% .13 85);
+    --st-gold-strong: oklch(68% .13 85);
+    --st-blue: #aec6ff;
+    --st-danger: #ffb4ab;
+    --st-success: #77d7ad;
+    --st-radius-control: 8px;
+    --st-radius-card: 8px;
+    background: var(--st-bg) !important;
+    color: var(--st-text) !important;
+    font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif !important;
+  }
+
+  /* Application shell */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-shell,
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-main {
+    background: var(--st-bg) !important;
+    color: var(--st-text) !important;
+  }
+  .app-root.fleetparts-shell:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-main > .fleetparts-page-heading.no-print {
+    background: transparent !important;
+    color: var(--st-text) !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--st-outline) !important;
+    border-radius: 0 !important;
+  }
+  .app-root.fleetparts-shell:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-main > :is(div,section) > .no-print,
+  .app-root.fleetparts-shell:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-main > .no-print:not(.fleetparts-page-heading) {
+    background: var(--st-surface-mid) !important;
+    color: var(--st-text) !important;
+    border: 1px solid var(--st-outline) !important;
+    border-radius: var(--st-radius-card) !important;
+    box-shadow: none !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-heading-status {
+    background: var(--st-surface-high) !important;
+    color: var(--st-success) !important;
+    border: 1px solid var(--st-outline) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-main {
+    max-width: 1440px;
+    padding: 32px !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-topbar {
+    min-height: 72px !important;
+    padding: 0 32px !important;
+    background: color-mix(in srgb, var(--st-surface) 96%, transparent) !important;
+    border-bottom: 1px solid var(--st-outline) !important;
+    box-shadow: none !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-current-section,
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-topbar-actions {
+    color: var(--st-text) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-sidebar-open {
+    width: 252px !important;
+    min-width: 252px !important;
+    padding: 20px 12px !important;
+    background: var(--st-surface) !important;
+    color: var(--st-text) !important;
+    border-right: 1px solid var(--st-outline) !important;
+    box-shadow: 20px 0 48px rgb(0 0 0 / .34) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-sidebar-open button {
+    min-height: 44px;
+    padding: 10px 12px !important;
+    background: transparent !important;
+    color: var(--st-muted) !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-sidebar-open button:hover {
+    background: var(--st-surface-high) !important;
+    color: var(--st-text) !important;
+    border-color: var(--st-outline) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-nav-section {
+    color: var(--st-gold) !important;
+    border-color: var(--st-outline) !important;
+  }
+
+  /* Page headers */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-page-heading,
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.settings-hero,.users-hero,.role-home-hero) {
+    padding: 24px 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--st-outline) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: var(--st-text) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.fleetparts-page-heading,.settings-hero,.users-hero,.role-home-hero) h1,
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.fleetparts-page-heading,.settings-hero,.users-hero,.role-home-hero) h2 {
+    color: var(--st-text) !important;
+    font-family: "Instrument Serif", Georgia, serif !important;
+    font-size: clamp(28px, 3vw, 36px) !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -.01em !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.fleetparts-page-heading,.settings-hero,.users-hero,.role-home-hero) p {
+    color: var(--st-muted) !important;
+    font-size: 14px !important;
+  }
+
+  /* Cards and workspaces */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(
+    .role-home-panel,.role-home-metrics article,.session-home-intro,.session-home-grid button,
+    .settings-workspace,.settings-content,.settings-section,.settings-preview,.settings-account-note,
+    .users-stats article,.users-create,.users-directory,.users-notice,
+    .module-page-surface,.app-toast,.cd-drawer,.cd-email
+  ) {
+    background: var(--st-surface-mid) !important;
+    color: var(--st-text) !important;
+    border: 1px solid var(--st-outline) !important;
+    border-radius: var(--st-radius-card) !important;
+    box-shadow: none !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.role-home-panel,.settings-section,.users-directory) > header {
+    background: var(--st-surface-high) !important;
+    border-color: var(--st-outline) !important;
+    border-radius: var(--st-radius-card) var(--st-radius-card) 0 0 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.role-home-panel,.role-home-metrics article,.settings-section,.users-directory) :is(h2,h3,strong) {
+    color: var(--st-text) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.role-home-panel,.role-home-metrics article,.settings-section,.users-directory) :is(p,small,span) {
+    color: var(--st-muted);
+  }
+
+  /* Forms */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(input,select,textarea) {
+    min-height: 40px;
+    background: var(--st-surface-low) !important;
+    color: var(--st-text) !important;
+    border: 1px solid var(--st-outline-strong) !important;
+    border-radius: var(--st-radius-control) !important;
+    box-shadow: none !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(input,select,textarea):hover {
+    border-color: var(--st-muted) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(input,select,textarea):focus {
+    outline: 2px solid var(--st-gold) !important;
+    outline-offset: 1px !important;
+    border-color: var(--st-gold) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(input,textarea)::placeholder {
+    color: #a99f93 !important;
+    opacity: 1 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) label {
+    color: var(--st-muted) !important;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .025em;
+  }
+
+  /* Buttons */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) button {
+    min-height: 40px;
+    border: 1px solid var(--st-outline) !important;
+    border-radius: var(--st-radius-control) !important;
+    background: var(--st-surface-high) !important;
+    color: var(--st-text) !important;
+    font-weight: 650 !important;
+    box-shadow: inset 0 -1px 0 rgb(0 0 0 / .24) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) button:hover:not(:disabled) {
+    background: var(--st-surface-top) !important;
+    border-color: var(--st-gold-strong) !important;
+    color: var(--st-gold) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(button.primary,button.users-primary,.cd-new-btn,.cd-send,.login-submit) {
+    background: var(--st-gold) !important;
+    border-color: var(--st-gold-strong) !important;
+    color: #261900 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(button.is-danger,.users-actions .is-danger,.settings-session-actions .is-danger) {
+    background: #93000a !important;
+    border-color: #ffb4ab !important;
+    color: #ffdad6 !important;
+  }
+
+  /* Tables */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) table {
+    width: 100%;
+    background: var(--st-surface-mid) !important;
+    color: var(--st-text) !important;
+    border: 1px solid var(--st-outline) !important;
+    border-radius: 12px !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    overflow: hidden;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) thead th {
+    height: 40px;
+    padding: 8px 12px !important;
+    background: var(--st-surface-high) !important;
+    color: var(--st-gold) !important;
+    border-color: var(--st-outline) !important;
+    font-family: Inter, ui-monospace, monospace !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: .05em !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) tbody td {
+    height: 40px;
+    padding: 8px 12px !important;
+    background: var(--st-surface-mid) !important;
+    color: var(--st-text) !important;
+    border-color: var(--st-outline) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) tbody tr:nth-child(even) td {
+    background: var(--st-surface-low) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) tbody tr:hover td {
+    background: var(--st-surface-high) !important;
+  }
+
+  /* Settings */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-workspace {
+    display: grid;
+    grid-template-columns: 280px minmax(0,1fr);
+    gap: 0;
+    overflow: hidden;
+  }
+  .app-root.fleetparts-shell:is([data-theme="dark"],[data-theme="noir"]) .settings-page .settings-hero {
+    padding: 24px !important;
+    background: var(--st-surface-mid) !important;
+    border: 1px solid var(--st-outline) !important;
+    border-radius: var(--st-radius-card) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-page :is(h1,h2,h3,h4,p,strong,small,span,label,legend) {
+    color: var(--st-text) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-page :is(p,small) {
+    color: var(--st-muted) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-page .settings-security {
+    background: var(--st-surface-high) !important;
+    color: var(--st-text) !important;
+    border: 1px solid var(--st-outline) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-page .settings-nav button * {
+    color: inherit !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-page .settings-section > header,
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-page .settings-section > div:first-child {
+    color: var(--st-text) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-nav {
+    padding: 16px !important;
+    background: var(--st-surface-low) !important;
+    border-right: 1px solid var(--st-outline) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-nav button {
+    width: 100%;
+    justify-content: flex-start;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-nav button.is-active {
+    background: var(--st-surface-high) !important;
+    color: var(--st-gold) !important;
+    border-left: 3px solid var(--st-gold) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-content {
+    padding: 28px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-theme-grid button {
+    padding: 10px !important;
+    background: var(--st-surface-low) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-theme-grid button.is-active {
+    border: 2px solid var(--st-gold) !important;
+    color: var(--st-gold) !important;
+  }
+
+  /* Administration */
+  .app-root.fleetparts-shell:is([data-theme="dark"],[data-theme="noir"]) .users-page .users-hero {
+    padding: 24px !important;
+    background: var(--st-surface-mid) !important;
+    border: 1px solid var(--st-outline) !important;
+    border-radius: var(--st-radius-card) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-page :is(h1,h2,h3,h4,p,strong,small,span,label) {
+    color: var(--st-text) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-page :is(p,small) {
+    color: var(--st-muted) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-stats {
+    gap: 16px !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-search {
+    display: flex !important;
+    align-items: center !important;
+    background: var(--st-surface-low) !important;
+    border: 1px solid var(--st-outline-strong) !important;
+    border-radius: var(--st-radius-control) !important;
+    overflow: hidden;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-search input {
+    width: 100% !important;
+    border: 0 !important;
+    outline: 0 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-avatar {
+    background: var(--st-gold-strong) !important;
+    color: #fff8e8 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-status {
+    background: var(--st-surface-high) !important;
+    color: var(--st-muted) !important;
+    border: 1px solid var(--st-outline) !important;
+    border-radius: 4px !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .users-status.is-online {
+    color: var(--st-success) !important;
+  }
+
+  /* Dashboard */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .role-home-metrics article {
+    min-height: 144px;
+    padding: 20px !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .role-home-metrics strong {
+    color: var(--st-gold) !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .role-home-action-mark {
+    background: var(--st-surface-high) !important;
+    color: var(--st-gold) !important;
+    border-color: var(--st-outline) !important;
+  }
+
+  /* Messaging and toast */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) :is(.cd-header,.cd-tabs,.cd-chat-head,.cd-input) {
+    background: var(--st-surface) !important;
+    border-color: var(--st-outline) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .cd-msgs {
+    background: var(--st-bg) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .cd-msg:not(.me) .cd-text {
+    background: var(--st-surface-top) !important;
+    color: var(--st-text) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .cd-msg.me .cd-text {
+    background: var(--st-gold-strong) !important;
+    color: #fff8e8 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .app-toast {
+    border-left: 4px solid var(--st-gold) !important;
+  }
+
+  /* Printable business documents: readable white paper on every theme */
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .print-card {
+    background: #fff !important;
+    color: #172033 !important;
+    border: 1px solid #bfc5cd !important;
+    border-radius: 8px !important;
+    box-shadow: 0 18px 60px rgb(0 0 0 / .38) !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .print-card :is(h1,h2,h3,h4,p,span,strong,small,label,td,th) {
+    color: #172033 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .print-card :is(input,select,textarea) {
+    background: #fff !important;
+    color: #172033 !important;
+    border-color: #cbd5e1 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .print-card table {
+    background: #fff !important;
+    color: #172033 !important;
+    border-color: #94a3b8 !important;
+  }
+  .app-root:is([data-theme="dark"],[data-theme="noir"]) .print-card :is(th,td) {
+    background: #fff !important;
+    color: #172033 !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  @media (max-width: 900px) {
+    .app-root:is([data-theme="dark"],[data-theme="noir"]) .fleetparts-main { padding: 20px 16px !important; }
+    .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-workspace { grid-template-columns: 1fr; }
+    .app-root:is([data-theme="dark"],[data-theme="noir"]) .settings-nav { border-right: 0 !important; border-bottom: 1px solid var(--st-outline) !important; }
+  }
+}
+
+/* Séparateurs verticaux lisibles entre toutes les colonnes, aperçu inclus. */
+@media screen {
+  .app-root table :is(th, td):not(:last-child) {
+    border-right: 1px solid #cbd5e1 !important;
+  }
+  .app-root .print-card table :is(th, td):not(:last-child) {
+    border-right: 2px solid #94a3b8 !important;
+  }
+  .app-root .print-card table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+  }
+  .app-root .print-card table :is(th, td) {
+    box-sizing: border-box !important;
+    height: 30px;
+    vertical-align: middle !important;
+    text-align: center;
+  }
+  .app-root .print-card table :is(input, textarea) {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: 24px !important;
+    margin: 0 !important;
+    padding: 0 4px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    resize: none !important;
+    line-height: 24px !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+  }
+  .app-root .print-card table textarea {
+    overflow: hidden !important;
+  }
+  .app-root .print-card tbody tr {
+    border-bottom: 1px solid #dbe1e8 !important;
+  }
+  .app-root .print-card tbody tr.print-empty-row,
+  .app-root .print-card tbody tr.print-empty-row td {
+    border-top: 0 !important;
+    border-bottom: 1px solid #dbe1e8 !important;
+    background: #fff !important;
+  }
+  .app-root .print-card .print-summary-grid {
+    gap: 4px !important;
+    align-items: start !important;
+  }
+  .app-root .print-card .print-summary-grid > div {
+    min-height: 0 !important;
+    padding: 4px 6px !important;
+    border-radius: 4px !important;
+    line-height: 1.15 !important;
+  }
+  .app-root .print-card .print-summary-grid > div > :is(span, strong) {
+    margin-top: 0 !important;
+    margin-bottom: 2px !important;
+    line-height: 1.15 !important;
+  }
+  .app-root .print-card .print-summary-grid > div > div {
+    min-height: 0 !important;
+    margin-top: 2px !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    line-height: 1.15 !important;
+  }
+  .app-root .print-card .print-summary-grid :is(input:not([type="radio"]), select) {
+    min-height: 0 !important;
+    height: 20px !important;
+    padding: 0 3px !important;
+    line-height: 20px !important;
+  }
+  .app-root .print-card .print-summary-grid label {
+    min-height: 20px !important;
+    line-height: 20px !important;
+  }
+}
+
+/* Demande utilisateur: tous les thèmes utilisent désormais une base blanche. */
+@media screen {
+  .app-root {
+    --st-bg:#fff;
+    --st-surface:#fff;
+    --st-surface-low:#f8fafc;
+    --st-surface-mid:#fff;
+    --st-surface-high:#f3f4f6;
+    --st-surface-top:#e5e7eb;
+    --st-text:#111827;
+    --st-muted:#64748b;
+    --st-outline:#d9dde3;
+    --st-outline-strong:#b7bec8;
+    color-scheme:light!important;
+    background:#fff!important;
+    color:#111827!important;
+  }
+  .app-root :is(.fleetparts-main,.fleetparts-topbar,.fleetparts-sidebar-open,.fleetparts-page-heading,.role-home-panel,.role-home-metrics article,.session-home-intro,.session-home-grid button,.settings-hero,.settings-workspace,.settings-content,.settings-section,.settings-preview,.settings-account-note,.users-hero,.users-stats article,.users-create,.users-directory,.module-page-surface,.app-toast,.cd-drawer,.cd-header,.cd-tabs,.cd-chat-head,.cd-input,.cd-email) {
+    background:#fff!important;
+    color:#111827!important;
+    border-color:#d9dde3!important;
+  }
+  .app-root :is(h1,h2,h3,h4,h5,h6,p,label,strong,small,li,td) { color:#111827!important; }
+  .app-root :is(input,select,textarea) {
+    background:#fff!important;
+    color:#111827!important;
+    -webkit-text-fill-color:#111827!important;
+    border-color:#b7bec8!important;
+  }
+  .app-root :is(input,textarea)::placeholder { color:#6b7280!important;-webkit-text-fill-color:#6b7280!important; }
+  .app-root table { background:#fff!important;color:#111827!important;border-color:#d9dde3!important; }
+  .app-root thead th { background:#f3f4f6!important;color:#374151!important;border-color:#d9dde3!important; }
+  .app-root tbody td { background:#fff!important;color:#111827!important;border-color:#e5e7eb!important; }
+  .app-root tbody tr:nth-child(even) td { background:#f8fafc!important; }
+  .app-root .settings-nav { background:#f8fafc!important;border-color:#d9dde3!important; }
+  .app-root .settings-nav button,.app-root .fleetparts-sidebar-open button { background:#fff!important;color:#111827!important;border-color:#e5e7eb!important; }
+  .app-root .settings-nav button.is-active { background:#f3f4f6!important;color:#111827!important;border-left-color:#111827!important; }
+  .app-root .fleetparts-heading-status,.app-root .role-home-status { background:#fff!important;color:#166534!important;border-color:#d1d5db!important; }
+  .app-root button:not(.primary):not(.users-primary):not(.is-danger) { background:#fff!important;color:#111827!important;border-color:#b7bec8!important; }
+}
