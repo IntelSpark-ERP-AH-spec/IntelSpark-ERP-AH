@@ -3491,11 +3491,18 @@ export default function App() {
           }
           try {
             const localValue = readLocalSyncValue(key);
+            const shouldRecoverLocalCatalog = key === 'is_catalog'
+              && user.role === 'admin'
+              && !resetState
+              && !hasMeaningfulSyncValue(val)
+              && hasMeaningfulSyncValue(localValue);
             if ((shouldSeedSharedAdmin && hasMeaningfulSyncValue(localValue))
+              || shouldRecoverLocalCatalog
               || (COMPANY_SYNC_KEYS.has(key)
                 && !hasMeaningfulSyncValue(val)
                 && hasMeaningfulSyncValue(localValue))) {
-              if (shouldSeedSharedAdmin && ADMIN_SHARED_SEED_KEYS.includes(key)) {
+              if ((shouldSeedSharedAdmin || shouldRecoverLocalCatalog)
+                && ADMIN_SHARED_SEED_KEYS.includes(key)) {
                 sharedSeed[key] = localValue;
               }
               continue;
