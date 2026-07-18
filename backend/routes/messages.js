@@ -16,7 +16,10 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_DOCUMENT_BYTES = 128 * 1024;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const ROUTE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const PDF_UPLOAD_DIR = path.resolve(process.env.MESSAGE_PDF_DIR || path.resolve(ROUTE_DIR, '..', 'uploads', 'message-pdfs'));
+const DEFAULT_PDF_DIR = process.env.NETLIFY === 'true'
+  ? path.join('/tmp', 'message-pdfs')
+  : path.resolve(ROUTE_DIR, '..', 'uploads', 'message-pdfs');
+const PDF_UPLOAD_DIR = path.resolve(process.env.MESSAGE_PDF_DIR || DEFAULT_PDF_DIR);
 mkdirSync(PDF_UPLOAD_DIR, { recursive: true });
 
 function msgSelect() {
