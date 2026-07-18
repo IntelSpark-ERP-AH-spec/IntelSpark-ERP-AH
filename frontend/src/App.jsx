@@ -2214,7 +2214,18 @@ export default function App() {
   const stockOptionalForCurrentDocument = ['DEV', 'BC', 'AVOIR'].includes(documentType)
     || (documentType === 'FACT' && Boolean(sourceDevisNumber));
 
-  const [catalog, setCatalog] = useState([]);
+  const catalogDirtyRef = useRef(false);
+  const catalogRevisionRef = useRef(0);
+  const [catalog, setCatalogState] = useState(() => ls.getJSON('is_catalog', []));
+  const setCatalog = useCallback((updater) => {
+    setCatalogState(previous => {
+      const next = typeof updater === 'function' ? updater(previous) : updater;
+      if (next === previous) return previous;
+      catalogDirtyRef.current = true;
+      catalogRevisionRef.current += 1;
+      return next;
+    });
+  }, []);
   const [items, setItems] = useState(() => ls.getJSON('is_items', []));
   const [leads, setLeads] = useState(() => ls.getJSON('is_leads', [
     { id: 1, client: 'CARRIERE MENARA', value: 4480, stage: 'Négociation', probability: 80, ref: 'REF 35765' },
@@ -3437,18 +3448,34 @@ export default function App() {
   const syncTimer = useRef(null);
   const mounted = useRef(false);
   const lastSyncedData = useRef(new Map());
+  const [serverSyncReady, setServerSyncReady] = useState(false);
 
   useEffect(() => {
-    if (!user || mounted.current) return;
-    const serverLoadKey = `is_server_loaded_v3_${user.id}`;
-    const alreadyLoaded = sessionStorage.getItem(serverLoadKey);
-    if (alreadyLoaded) { mounted.current = true; return; }
-    loadData().then(serverData => {
+    if (!user) {
+      mounted.current = false;
+      setServerSyncReady(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const hydrationReloadKey = `is_server_hydration_reload_v4_${user.id}`;
+    if (sessionStorage.getItem(hydrationReloadKey) === '1') {
+      sessionStorage.removeItem(hydrationReloadKey);
+      mounted.current = true;
+      setServerSyncReady(true);
+      return undefined;
+    }
+
+    mounted.current = false;
+    setServerSyncReady(false);
+    loadData().then(async serverData => {
+      if (cancelled) return;
       if (serverData && typeof serverData === 'object') {
         const sharedAdminInitialized = serverData.is_admin_shared_initialized === true;
         const shouldSeedSharedAdmin = user.role === 'admin'
           && !sharedAdminInitialized
           && ADMIN_SHARED_SEED_KEYS.some(key => hasMeaningfulSyncValue(readLocalSyncValue(key)));
+        const sharedSeed = {};
         const serverResetVersion = String(serverData.is_data_reset_version || '');
         const localResetVersion = String(localStorage.getItem('is_data_reset_version') || '');
         const resetState = serverResetVersion && serverResetVersion !== localResetVersion;
@@ -3468,6 +3495,9 @@ export default function App() {
               || (COMPANY_SYNC_KEYS.has(key)
                 && !hasMeaningfulSyncValue(val)
                 && hasMeaningfulSyncValue(localValue))) {
+              if (shouldSeedSharedAdmin && ADMIN_SHARED_SEED_KEYS.includes(key)) {
+                sharedSeed[key] = localValue;
+              }
               continue;
             }
             if (typeof val === 'object') {
@@ -3477,12 +3507,21 @@ export default function App() {
             }
           } catch {}
         }
+        if (Object.keys(sharedSeed).length > 0) {
+          const seeded = await saveData({ ...sharedSeed, is_admin_shared_initialized: true });
+          if (!seeded && Object.prototype.hasOwnProperty.call(sharedSeed, 'is_catalog')) {
+            catalogDirtyRef.current = true;
+          }
+        }
+        sessionStorage.setItem(hydrationReloadKey, '1');
+        window.location.reload();
+        return;
       }
-      sessionStorage.setItem(serverLoadKey, '1');
       mounted.current = true;
-      window.location.reload();
+      setServerSyncReady(true);
     });
-  }, [user]);
+    return () => { cancelled = true; };
+  }, [user?.id, user?.role, loadData, saveData]);
 
   const syncToServer = useCallback(() => {
     const data = {
@@ -3524,15 +3563,73 @@ export default function App() {
     brands, catalog, items, leads, clients, savedDocs, documentHistory,
     documentType, documentNumber, documentStatus, documentDate, validityDate, clientDetails, clientICE,
     representative, supplierName, orderRef, sourceDevisNumber, paymentMethod, paymentDueDate, parentFactRef,
-    user?.role,
+    user?.role, saveData,
   ]);
 
   useEffect(() => {
-    if (!mounted.current) return;
+    if (!serverSyncReady || !mounted.current) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(syncToServer, 3000);
     return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
-  }, [syncToServer]);
+  }, [serverSyncReady, syncToServer]);
+
+  useEffect(() => {
+    if (!serverSyncReady || !user || !catalogDirtyRef.current) return undefined;
+    let cancelled = false;
+    let retryTimer = null;
+    const revision = catalogRevisionRef.current;
+    const persistCatalog = async () => {
+      const saved = await saveData({ is_catalog: catalog, is_admin_shared_initialized: true });
+      if (cancelled) return;
+      if (!saved) {
+        retryTimer = window.setTimeout(persistCatalog, 2000);
+        return;
+      }
+      if (revision === catalogRevisionRef.current) catalogDirtyRef.current = false;
+      lastSyncedData.current.set('is_catalog', JSON.stringify(catalog));
+      lastSyncedData.current.set('is_admin_shared_initialized', JSON.stringify(true));
+    };
+    const saveTimer = window.setTimeout(persistCatalog, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(saveTimer);
+      if (retryTimer) window.clearTimeout(retryTimer);
+    };
+  }, [catalog, serverSyncReady, user?.id, saveData]);
+
+  useEffect(() => {
+    if (!serverSyncReady || !user) return undefined;
+    let cancelled = false;
+    let inFlight = false;
+    const pullCatalog = async () => {
+      if (cancelled || inFlight || document.hidden || catalogDirtyRef.current) return;
+      inFlight = true;
+      try {
+        const remoteCatalog = await api.request('/data/doc/is_catalog');
+        if (!cancelled && Array.isArray(remoteCatalog) && !catalogDirtyRef.current) {
+          const remoteSerialized = JSON.stringify(remoteCatalog);
+          setCatalogState(current => {
+            if (JSON.stringify(current) === remoteSerialized) return current;
+            ls.setJSON('is_catalog', remoteCatalog);
+            lastSyncedData.current.set('is_catalog', remoteSerialized);
+            return remoteCatalog;
+          });
+        }
+      } catch {}
+      finally { inFlight = false; }
+    };
+    const onVisibility = () => { if (!document.hidden) pullCatalog(); };
+    const interval = window.setInterval(pullCatalog, 3000);
+    window.addEventListener('focus', pullCatalog);
+    document.addEventListener('visibilitychange', onVisibility);
+    pullCatalog();
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', pullCatalog);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [serverSyncReady, user?.id]);
 
   const autoSaveTimer = useRef(null);
   const autoSave = useCallback(() => {
