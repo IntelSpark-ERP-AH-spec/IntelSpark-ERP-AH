@@ -557,7 +557,7 @@ function configureHttpServer(instance) {
 }
 
 async function startServer() {
-  await mountBackendRoutes();
+  await prepareApp();
 
   const tlsCertPath = process.env.TLS_CERT_PATH;
   const tlsKeyPath = process.env.TLS_KEY_PATH;
@@ -626,6 +626,11 @@ async function startServer() {
   maintenanceTimer.unref();
 }
 
+async function prepareApp() {
+  if (!backendInitDone) await mountBackendRoutes();
+  return app;
+}
+
 async function shutdown(signal) {
   console.log(`Arret controle: ${signal}`);
   if (backupTimer) clearInterval(backupTimer);
@@ -645,12 +650,15 @@ async function shutdown(signal) {
   process.exit(0);
 }
 
-process.once('SIGTERM', () => shutdown('SIGTERM'));
-process.once('SIGINT', () => shutdown('SIGINT'));
+if (require.main === module) {
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
 
-startServer().catch(err => {
-  console.error('Erreur au démarrage:', err);
-  process.exit(1);
-});
+  startServer().catch(err => {
+    console.error('Erreur au démarrage:', err);
+    process.exit(1);
+  });
+}
 
 module.exports = app;
+module.exports.prepareApp = prepareApp;
