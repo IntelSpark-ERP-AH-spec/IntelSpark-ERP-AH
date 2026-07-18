@@ -13,6 +13,18 @@ const forge = require('node-forge');
 require('dotenv').config();
 
 const app = express();
+const isNetlifyFunction = process.env.NETLIFY === 'true' || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+if (isNetlifyFunction) {
+  process.env.ALLOWED_ORIGINS ||= process.env.URL || 'https://intelspark-erp-ah.netlify.app';
+  process.env.PUBLIC_URL ||= process.env.URL || 'https://intelspark-erp-ah.netlify.app';
+  process.env.DATA_ENCRYPTION_KEY ||= process.env.JWT_SECRET;
+}
+
+function fatalConfig(message) {
+  console.error(message);
+  if (isNetlifyFunction) throw new Error(message);
+  process.exit(1);
+}
 
 // Nonce unique par reponse. Il permet d'autoriser uniquement les scripts
 // injectes par notre propre page HTML, sans ouvrir tout le meme domaine.
@@ -27,13 +39,11 @@ app.use((req, res, next) => {
 const REQUIRED_ENV = ['JWT_SECRET'];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key] || process.env[key].includes('a_remplacer')) {
-    console.error(`ERREUR: ${key} n'est pas configuré dans .env`);
-    process.exit(1);
+    fatalConfig(`ERREUR: ${key} n'est pas configuré dans .env`);
   }
 }
 if (process.env.ADMIN_PASSWORD === 'admin123') {
-  console.error('ERREUR: Veuillez changer ADMIN_PASSWORD dans .env (mot de passe trop faible)');
-  process.exit(1);
+  fatalConfig('ERREUR: Veuillez changer ADMIN_PASSWORD dans .env (mot de passe trop faible)');
 }
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -48,20 +58,16 @@ const GLOBAL_RATE_LIMIT = boundedInteger('HTTP_GLOBAL_RATE_LIMIT', 60000, 1000, 
 const TARGET_CONCURRENT_USERS = boundedInteger('TARGET_CONCURRENT_USERS', 100, 10, 1000);
 const AUDIT_RETENTION_DAYS = boundedInteger('AUDIT_RETENTION_DAYS', 365, 30, 3650);
 if (JWT_SECRET.length < 32) {
-  console.error('ERREUR: JWT_SECRET doit contenir au moins 32 caracteres');
-  process.exit(1);
+  fatalConfig('ERREUR: JWT_SECRET doit contenir au moins 32 caracteres');
 }
 if (!isDev && !process.env.ALLOWED_ORIGINS) {
-  console.error('ERREUR: ALLOWED_ORIGINS doit être configuré en production');
-  process.exit(1);
+  fatalConfig('ERREUR: ALLOWED_ORIGINS doit être configuré en production');
 }
 if (!isDev && process.env.FORCE_HTTPS === 'true' && !process.env.PUBLIC_URL) {
-  console.error('ERREUR: PUBLIC_URL doit etre configure avec FORCE_HTTPS');
-  process.exit(1);
+  fatalConfig('ERREUR: PUBLIC_URL doit etre configure avec FORCE_HTTPS');
 }
 if (!isDev && (!process.env.DATA_ENCRYPTION_KEY || process.env.DATA_ENCRYPTION_KEY.length < 32)) {
-  console.error('ERREUR: DATA_ENCRYPTION_KEY doit contenir au moins 32 caracteres en production');
-  process.exit(1);
+  fatalConfig('ERREUR: DATA_ENCRYPTION_KEY doit contenir au moins 32 caracteres en production');
 }
 
 // ============================================================
