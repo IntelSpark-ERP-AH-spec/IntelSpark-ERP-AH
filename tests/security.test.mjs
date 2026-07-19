@@ -404,6 +404,19 @@ test('document navigation resumes the open page without creating another one', (
   assert.match(app, /<button onClick=\{handleCreateNewPage\}[^>]*>Nouvelle page<\/button>/);
 });
 
+test('company edits autosave without shared-loading error flashes', () => {
+  const app = source('frontend/src/App.jsx');
+  const auth = source('frontend/src/AuthContext.jsx');
+  assert.match(app, /const COMPANY_IDENTITY_KEYS = new Set/);
+  assert.match(app, /const companyRevisionRef = useRef\(new Map\(\)\)/);
+  assert.match(app, /saveCompanySettings\(scope, \{ silent: true \}\)/);
+  assert.match(app, /if \(!saved \|\| companyDirtyRef\.current\.size > 0\) return/);
+  assert.match(app, /syncTimer\.current = window\.setTimeout\(syncToServer, 2000\)/);
+  assert.match(auth, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
+  assert.doesNotMatch(`${app}\n${auth}`, /Chargement partag.{0,30}impossible/);
+  assert.doesNotMatch(app, /syncError \|\| 'Synchronisation Supabase/);
+});
+
 test('disaster recovery drill validates critical data', () => {
   const recoveryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'intelsheets-dr-test-'));
   const backupPath = path.join(recoveryDirectory, 'recovery.db');
