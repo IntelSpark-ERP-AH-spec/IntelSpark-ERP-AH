@@ -1,4 +1,30 @@
 const API = '/api';
+const TRANSIENT_SERVER_STATUSES = new Set([502, 503, 504]);
+const TRANSIENT_RETRY_DELAYS_MS = [700, 1_500, 3_000];
+
+function wait(delayMs) {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
+function canRetryRequest(method, path) {
+  return ['GET', 'HEAD', 'OPTIONS'].includes(method) || path === '/auth/login';
+}
+
+async function fetchWithRetry(url, fetchOptions, method, path) {
+  const retryDelays = canRetryRequest(method, path) ? TRANSIENT_RETRY_DELAYS_MS : [];
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await fetch(url, fetchOptions);
+      if (!TRANSIENT_SERVER_STATUSES.has(response.status) || attempt >= retryDelays.length) {
+        return response;
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError' || attempt >= retryDelays.length) throw error;
+    }
+    await wait(retryDelays[attempt]);
+  }
+}
 
 export function getAuthToken() {
   return sessionStorage.getItem('auth_token') || '';
@@ -26,18 +52,19 @@ async function request(path, options = {}) {
   const csrfToken = getCsrfToken();
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) headers['X-CSRF-Token'] = csrfToken;
   if (options.skipContentType) delete headers['Content-Type'];
-  const res = await fetch(`${API}${path}`, {
+  const fetchOptions = {
     ...options,
     headers,
     credentials: 'same-origin',
-  });
+  };
+  const res = await fetchWithRetry(`${API}${path}`, fetchOptions, method, path);
   const responseText = await res.text();
   let data;
   try {
     data = responseText ? JSON.parse(responseText) : {};
   } catch {
     if (!res.ok) {
-      throw new Error('Le service demandé n\'est pas disponible. Redémarrez le serveur puis réessayez.');
+      throw new Error('Connexion momentanément indisponible. Réessayez dans quelques secondes.');
     }
     throw new Error('Le serveur a renvoyé une réponse invalide.');
   }
@@ -46,7 +73,12 @@ async function request(path, options = {}) {
       setAuthToken(null);
       window.location.hash = '#login';
     }
-    const error = new Error(data.error || (res.status === 401 ? 'Session expirée' : 'Erreur serveur'));
+    const unavailable = TRANSIENT_SERVER_STATUSES.has(res.status);
+    const error = new Error(data.error || (res.status === 401
+      ? 'Session expirée'
+      : unavailable
+        ? 'Connexion momentanément indisponible. Réessayez dans quelques secondes.'
+        : 'Erreur serveur'));
     error.code = data.code;
     error.status = res.status;
     throw error;
