@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { api, setAuthToken, getAuthToken } from './api';
 import { subscribeOrganization } from './supabaseRealtime';
 
@@ -60,6 +60,13 @@ export function AuthProvider({ children }) {
   const [realtimeStatus, setRealtimeStatus] = useState('idle');
   const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [syncError, setSyncError] = useState(null);
+  const activeWritesRef = useRef(0);
+  const deferredRealtimeRef = useRef(null);
+
+  const emitOrganizationChange = useCallback((payload = {}) => {
+    setRealtimeRevision(value => value + 1);
+    window.dispatchEvent(new CustomEvent('organization:changed', { detail: payload }));
+  }, []);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -88,14 +95,17 @@ export function AuthProvider({ children }) {
       setOrganization(context);
       setSyncError(null);
       unsubscribe = subscribeOrganization(context.realtime_topic, payload => {
-        setRealtimeRevision(value => value + 1);
-        window.dispatchEvent(new CustomEvent('organization:changed', { detail: payload }));
+        if (activeWritesRef.current > 0) {
+          deferredRealtimeRef.current = payload;
+          return;
+        }
+        emitOrganizationChange(payload);
       }, setRealtimeStatus);
     }).catch(error => {
       if (!cancelled) setSyncError(error.message || 'Synchronisation indisponible');
     });
     return () => { cancelled = true; unsubscribe(); };
-  }, [user?.id, user?.organization_id]);
+  }, [user?.id, user?.organization_id, emitOrganizationChange]);
 
   const login = useCallback(async (username, password) => {
     const data = await api.login(username, password);
@@ -115,6 +125,7 @@ export function AuthProvider({ children }) {
   const hasDept = (...depts) => user && depts.includes(user.department);
 
   const saveData = useCallback(async (data) => {
+    activeWritesRef.current += 1;
     try {
       const entries = expandLargeEntries(data);
       for (let index = 0; index < entries.length; index += 4) {
@@ -129,8 +140,15 @@ export function AuthProvider({ children }) {
     } catch (error) {
       setSyncError(error.message || 'Sauvegarde impossible');
       return false;
+    } finally {
+      activeWritesRef.current = Math.max(0, activeWritesRef.current - 1);
+      if (activeWritesRef.current === 0 && deferredRealtimeRef.current) {
+        const payload = deferredRealtimeRef.current;
+        deferredRealtimeRef.current = null;
+        window.setTimeout(() => emitOrganizationChange(payload), 0);
+      }
     }
-  }, []);
+  }, [emitOrganizationChange]);
 
   const loadData = useCallback(async () => {
     try {

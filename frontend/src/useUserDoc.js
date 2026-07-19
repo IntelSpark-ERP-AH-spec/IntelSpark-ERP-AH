@@ -29,6 +29,8 @@ export function useUserDoc(key, initial) {
   const timeoutRef            = useRef(null);
   const lastSavedRef          = useRef(null);
   const keyRef                = useRef(key);
+  const savingRef             = useRef(false);
+  const deferredReloadRef     = useRef(false);
 
   useEffect(() => { keyRef.current = key; }, [key]);
 
@@ -65,7 +67,11 @@ export function useUserDoc(key, initial) {
   useEffect(() => {
     let cancelled = false;
     const reload = async () => {
-      if (saving || !getAuthToken()) return;
+      if (savingRef.current) {
+        deferredReloadRef.current = true;
+        return;
+      }
+      if (!getAuthToken()) return;
       try {
         const res = await fetch('/api/data/doc/' + encodeURIComponent(keyRef.current), {
           credentials: 'same-origin', headers: authHeaders('GET'),
@@ -81,12 +87,13 @@ export function useUserDoc(key, initial) {
     };
     window.addEventListener('organization:changed', reload);
     return () => { cancelled = true; window.removeEventListener('organization:changed', reload); };
-  }, [key, saving]);
+  }, [key]);
 
   // ── Sauvegarde atomique debouncée ─────────────────────────────────────────
   const persist = useCallback(async (value, k) => {
     if (!getAuthToken()) return;
     const keyName = k || keyRef.current;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -105,7 +112,12 @@ export function useUserDoc(key, initial) {
     } catch (e) {
       setError(e.message);
     } finally {
+      savingRef.current = false;
       setSaving(false);
+      if (deferredReloadRef.current) {
+        deferredReloadRef.current = false;
+        window.dispatchEvent(new CustomEvent('organization:changed', { detail: { deferred: true } }));
+      }
     }
   }, []);
 

@@ -94,7 +94,9 @@ function setCompanySetting(organizationId, key, value) {
   const column = COMPANY_KEY_TO_COLUMN[key];
   if (!column) return false;
   ensureCompanySettings(organizationId);
-  const stored = key === 'is_brands' ? JSON.stringify(value ?? []) : (value ?? null);
+  const stored = key === 'is_brands'
+    ? JSON.stringify(value ?? [])
+    : (value === null || value === undefined || String(value).trim().toLowerCase() === 'null' ? null : value);
   dbRun(`UPDATE company_settings SET ${column} = ?, updated_at = datetime('now') WHERE organization_id = ?`, [stored, organizationId]);
   return true;
 }
@@ -102,10 +104,11 @@ function setCompanySetting(organizationId, key, value) {
 function readCompanySettings(organizationId) {
   const row = dbGet('SELECT * FROM company_settings WHERE organization_id = ?', [organizationId]);
   if (!row) return {};
+  const text = value => value === null || value === undefined || String(value).trim().toLowerCase() === 'null' ? '' : String(value);
   return {
-    is_company_name: row.company_name || '', is_company_address: row.company_address || '',
-    is_company_phone: row.company_phone || '', is_company_email: row.company_email || '',
-    is_footer: row.legal_mentions || '', is_logo: row.logo_url || '',
+    is_company_name: text(row.company_name), is_company_address: text(row.company_address),
+    is_company_phone: text(row.company_phone), is_company_email: text(row.company_email),
+    is_footer: text(row.legal_mentions), is_logo: text(row.logo_url),
     is_brands: parseStoredJson(row.brands_json, []),
   };
 }
