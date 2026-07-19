@@ -146,10 +146,21 @@ export function AuthProvider({ children }) {
       const entries = expandLargeEntries(data);
       for (let index = 0; index < entries.length; index += 4) {
         const batch = entries.slice(index, index + 4);
-        const results = await Promise.all(batch.map(([key, value]) => api.request(
-          `/data/doc/${encodeURIComponent(key)}`,
-          { method: 'PUT', body: JSON.stringify(value) },
-        ).then(() => true).catch(() => false)));
+        const results = await Promise.all(batch.map(async ([key, value]) => {
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              await api.request(`/data/doc/${encodeURIComponent(key)}`, {
+                method: 'PUT', body: JSON.stringify(value),
+              });
+              return true;
+            } catch (error) {
+              const retryable = !error?.status || error.status === 408 || error.status === 429 || error.status >= 500;
+              if (!retryable || attempt === 1) return false;
+              await wait(LOAD_RETRY_DELAY_MS);
+            }
+          }
+          return false;
+        }));
         if (results.some(result => !result)) return false;
       }
       return true;

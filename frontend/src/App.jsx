@@ -1533,6 +1533,10 @@ const COMPANY_SYNC_KEYS = new Set([
   'is_company_name', 'is_company_address', 'is_company_phone',
   'is_company_email', 'is_footer', 'is_logo', 'is_brands',
 ]);
+const COMPANY_IDENTITY_KEYS = new Set([
+  'is_company_name', 'is_company_address', 'is_company_phone', 'is_company_email', 'is_logo',
+]);
+const COMPANY_BRANDING_KEYS = new Set(['is_footer', 'is_brands']);
 
 const ADMIN_SHARED_SEED_KEYS = [
   'is_logo', 'is_brands', 'is_footer', 'is_company_name', 'is_catalog',
@@ -1980,7 +1984,7 @@ const BulletinsPage = ({ t, language }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const { user, loading, logout, saveData, saveCompanyData, loadData, hasRole, organization, realtimeStatus, realtimeRevision, syncError } = useAuth();
+  const { user, loading, logout, saveData, saveCompanyData, loadData, hasRole, organization, realtimeStatus, realtimeRevision } = useAuth();
   const { connect, disconnect, onlineUsers, connected, lastNotification } = useWS();
   const i18n = useAppI18n();
   const canDelete = hasRole('admin');
@@ -3319,9 +3323,9 @@ export default function App() {
     if (!allowed.includes(file.type)) return notify('Format non supporté (PNG, JPG, WebP, SVG uniquement)', 'error');
     try {
       const url = await uploadCompanyAsset(file, { persist: false, kind: 'logo' });
-      companyDirtyRef.current.add('is_logo');
+      markCompanyDirty('is_logo');
       setCompanyLogo(url);
-      notify('Logo ajouté. Cliquez sur « Enregistrer » pour confirmer.', 'info');
+      notify('Logo ajouté et sauvegarde automatique préparée.', 'info');
     } catch (error) { notify(error.message || 'Envoi impossible', 'error'); }
     finally { e.target.value = ''; }
   };
@@ -3336,9 +3340,9 @@ export default function App() {
     try {
       const url = await uploadCompanyAsset(file, { persist: false, kind: 'brand' });
       const next = [...brands, { id: crypto.randomUUID(), logo: url }];
-      companyDirtyRef.current.add('is_brands');
+      markCompanyDirty('is_brands');
       setBrands(next);
-      notify('Logo de marque ajouté. Cliquez sur « Enregistrer » pour confirmer.', 'info');
+      notify('Logo de marque ajouté et sauvegarde automatique préparée.', 'info');
     } catch (error) {
       notify(error.message || 'Envoi impossible', 'error');
     } finally {
@@ -3348,9 +3352,9 @@ export default function App() {
 
   const removeBrand = async (id) => {
     const next = brands.filter(b => b.id !== id);
-    companyDirtyRef.current.add('is_brands');
+    markCompanyDirty('is_brands');
     setBrands(next);
-    notify('Marque supprimée localement. Cliquez sur « Enregistrer » pour confirmer.', 'info');
+    notify('Marque supprimée et sauvegarde automatique préparée.', 'info');
   };
 
   const moveBrand = async (id, dir) => {
@@ -3359,9 +3363,9 @@ export default function App() {
     if (idx < 0 || target < 0 || target >= brands.length) return;
     const next = [...brands];
     [next[idx], next[target]] = [next[target], next[idx]];
-    companyDirtyRef.current.add('is_brands');
+    markCompanyDirty('is_brands');
     setBrands(next);
-    notify('Ordre modifié localement. Cliquez sur « Enregistrer » pour confirmer.', 'info');
+    notify('Ordre modifié et sauvegarde automatique préparée.', 'info');
   };
 
   const S = {
@@ -3462,6 +3466,13 @@ export default function App() {
   const lastSyncedData = useRef(new Map());
   // Protect local company edits from stale Realtime snapshots.
   const companyDirtyRef = useRef(new Set());
+  const companyRevisionRef = useRef(new Map());
+  const companyAutosaveTimer = useRef(null);
+  const companyAutosaveRetryRef = useRef(0);
+  const markCompanyDirty = useCallback((key) => {
+    companyDirtyRef.current.add(key);
+    companyRevisionRef.current.set(key, (companyRevisionRef.current.get(key) || 0) + 1);
+  }, []);
   // Latest local draft, read by the stable server-apply callback.  A remote
   // snapshot must not replace a key that has changed locally since the last
   // successful save.
@@ -3483,9 +3494,11 @@ export default function App() {
     is_counter_AVOIR: counterValue('AVOIR'),
   };
   const [serverSyncReady, setServerSyncReady] = useState(false);
+  const [syncBootstrapAttempt, setSyncBootstrapAttempt] = useState(0);
 
-  const saveCompanySettings = useCallback(async (scope = 'all') => {
-    if (companySaving || !user) return false;
+  const saveCompanySettings = useCallback(async (scope = 'all', options = {}) => {
+    const silent = options?.silent === true;
+    if (companySaving || !user?.id) return false;
     if (syncTimer.current) {
       clearTimeout(syncTimer.current);
       syncTimer.current = null;
@@ -3500,6 +3513,9 @@ export default function App() {
         };
     setCompanySaving(true);
     Object.keys(values).forEach(key => companyDirtyRef.current.add(key));
+    const savedRevisions = new Map(
+      Object.keys(values).map(key => [key, companyRevisionRef.current.get(key) || 0]),
+    );
     try {
       const savedSettings = await saveCompanyData(scope, values);
       const canonicalValues = Object.fromEntries(
@@ -3507,17 +3523,42 @@ export default function App() {
       );
       Object.entries(canonicalValues).forEach(([key, value]) => {
         lastSyncedData.current.set(key, JSON.stringify(value));
-        companyDirtyRef.current.delete(key);
+        if ((companyRevisionRef.current.get(key) || 0) === savedRevisions.get(key)) {
+          companyDirtyRef.current.delete(key);
+        }
       });
-      notify('Paramètres de l’entreprise enregistrés et synchronisés', 'success');
+      companyAutosaveRetryRef.current = 0;
+      if (!silent) notify('Paramètres de l’entreprise enregistrés et synchronisés', 'success');
       return true;
     } catch (error) {
-      notify(error.message || 'Sauvegarde impossible', 'error');
+      companyAutosaveRetryRef.current += 1;
+      if (!silent) notify(error.message || 'Sauvegarde impossible', 'error');
       return false;
     } finally {
       setCompanySaving(false);
     }
-  }, [companySaving, user, companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands, saveCompanyData, notify]);
+  }, [companySaving, user?.id, companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands, saveCompanyData, notify]);
+
+  useEffect(() => {
+    if (!serverSyncReady || !user?.id || !companyEditMode || companySaving || companyDirtyRef.current.size === 0) return undefined;
+    const dirtyKeys = [...companyDirtyRef.current];
+    const hasIdentity = dirtyKeys.some(key => COMPANY_IDENTITY_KEYS.has(key));
+    const hasBranding = dirtyKeys.some(key => COMPANY_BRANDING_KEYS.has(key));
+    const scope = hasIdentity && hasBranding ? 'all' : (hasBranding ? 'branding' : 'identity');
+    const retryDelay = Math.min(companyAutosaveRetryRef.current * 2000, 15000);
+    companyAutosaveTimer.current = window.setTimeout(() => {
+      companyAutosaveTimer.current = null;
+      saveCompanySettings(scope, { silent: true });
+    }, 500 + retryDelay);
+    return () => {
+      if (companyAutosaveTimer.current) window.clearTimeout(companyAutosaveTimer.current);
+      companyAutosaveTimer.current = null;
+    };
+  }, [
+    serverSyncReady, user?.id, companyEditMode, companySaving,
+    companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands,
+    saveCompanySettings,
+  ]);
 
   const applyServerData = useCallback((serverData, options = {}) => {
     if (!serverData || typeof serverData !== 'object') return;
@@ -3567,12 +3608,14 @@ export default function App() {
   }, []);
 
   const finishCompanyEdit = useCallback(async () => {
+    if (companySaving) return;
+    if (companyDirtyRef.current.size > 0) {
+      const saved = await saveCompanySettings('all', { silent: true });
+      if (!saved || companyDirtyRef.current.size > 0) return;
+    }
     setCompanyEditMode(false);
     setEditMode(false);
-    companyDirtyRef.current.clear();
-    const serverData = await loadData();
-    if (serverData) applyServerData(serverData, { force: true });
-  }, [loadData, applyServerData]);
+  }, [companySaving, saveCompanySettings]);
 
   useEffect(() => {
     if (!user || !organization) {
@@ -3588,6 +3631,12 @@ export default function App() {
       const localSeedSnapshot = new Map(seedKeys.map(key => [key, readLocalSyncValue(key)]));
       let serverData = await loadData();
       if (cancelled) return;
+      if (!serverData) {
+        window.setTimeout(() => {
+          if (!cancelled) setSyncBootstrapAttempt(value => value + 1);
+        }, 2000);
+        return;
+      }
       if (serverData && user.role === 'admin') {
         const legacySeed = {};
         for (const key of seedKeys) {
@@ -3628,7 +3677,7 @@ export default function App() {
       setServerSyncReady(true);
     })();
     return () => { cancelled = true; };
-  }, [user?.id, user?.role, organization?.id, loadData, saveData, applyServerData, uploadCompanyAsset]);
+  }, [user?.id, user?.role, organization?.id, syncBootstrapAttempt, loadData, saveData, applyServerData, uploadCompanyAsset]);
 
   useEffect(() => {
     if (!serverSyncReady || !realtimeRevision || catalogDirtyRef.current) return;
@@ -3641,9 +3690,6 @@ export default function App() {
       is_font_size: String(globalFontSize), is_font_family: globalFontFamily, is_font_color: globalFontColor,
       is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
       is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo,
-      is_admin_shared_initialized: user?.role === 'admin' && ADMIN_SHARED_SEED_KEYS.some(
-        key => hasMeaningfulSyncValue(readLocalSyncValue(key)),
-      ),
       is_brands: brands,
       is_catalog: catalog, is_items: items, is_leads: leads, is_clients: clients,
       is_saved_docs: savedDocs, is_history_log: documentHistory,
@@ -3658,15 +3704,18 @@ export default function App() {
     };
     const changedData = {};
     for (const [key, value] of Object.entries(data)) {
-      // Company identity, logo, brands and legal mentions use explicit save
-      // buttons. Never persist an unfinished draft through the generic timer.
+      // Company identity, logo, brands and legal mentions use their dedicated
+      // atomic autosave. Keep them outside the generic document batches.
       if (COMPANY_SYNC_KEYS.has(key)) continue;
       const serialized = JSON.stringify(value);
       if (lastSyncedData.current.get(key) !== serialized) changedData[key] = value;
     }
     if (Object.keys(changedData).length === 0) return;
     saveData(changedData).then(saved => {
-      if (!saved) return;
+      if (!saved) {
+        syncTimer.current = window.setTimeout(syncToServer, 2000);
+        return;
+      }
       for (const [key, value] of Object.entries(changedData)) {
         lastSyncedData.current.set(key, JSON.stringify(value));
         if (COMPANY_SYNC_KEYS.has(key)) companyDirtyRef.current.delete(key);
@@ -3678,7 +3727,7 @@ export default function App() {
     brands, catalog, items, leads, clients, savedDocs, documentHistory,
     documentType, documentNumber, documentStatus, documentDate, validityDate, clientDetails, clientICE,
     representative, supplierName, orderRef, sourceDevisNumber, paymentMethod, paymentDueDate, parentFactRef,
-    user?.role, saveData,
+    saveData,
   ]);
 
   useEffect(() => {
@@ -3973,12 +4022,12 @@ export default function App() {
       <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" style={{ display: 'none' }} />
       <input type="file" ref={brandInputRef} onChange={handleBrandLogoUpload} accept="image/*" style={{ display: 'none' }} />
       <Notification msg={notification.msg} type={notification.type} title={notification.title} action={notification.action} secondaryAction={notification.secondaryAction} onClose={closeNotify} />
-      {(!serverSyncReady || syncError) && (
-        <div role="status" className="no-print" style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 5000, padding: '10px 14px', borderRadius: 10, background: syncError ? '#7f1d1d' : '#0f766e', color: '#fff', fontWeight: 700, boxShadow: '0 10px 30px rgba(15,23,42,.2)' }}>
-          {syncError || 'Synchronisation Supabase…'}
+      {!serverSyncReady && (
+        <div role="status" className="no-print" style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 5000, padding: '10px 14px', borderRadius: 10, background: '#0f766e', color: '#fff', fontWeight: 700, boxShadow: '0 10px 30px rgba(15,23,42,.2)' }}>
+          Synchronisation Supabase…
         </div>
       )}
-      {serverSyncReady && !syncError && realtimeStatus !== 'subscribed' && realtimeStatus !== 'idle' && (
+      {serverSyncReady && realtimeStatus !== 'subscribed' && realtimeStatus !== 'idle' && (
         <div className="no-print" style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 4999, padding: '7px 11px', borderRadius: 9, background: '#fff7ed', color: '#9a3412', border: '1px solid #fdba74', fontWeight: 700 }}>
           Reconnexion temps réel…
         </div>
@@ -4151,7 +4200,7 @@ export default function App() {
                     <>
                       <button type="button" onClick={() => saveCompanySettings('identity')} disabled={companySaving} style={S.btn('#0d9488')}>Enregistrer logo et coordonnées</button>
                       <button type="button" onClick={() => saveCompanySettings('branding')} disabled={companySaving} style={S.btn('#2563eb')}>Enregistrer marques et mentions</button>
-                      <button type="button" onClick={finishCompanyEdit} style={S.btnGhost}>Terminer</button>
+                      <button type="button" onClick={finishCompanyEdit} disabled={companySaving} style={S.btnGhost}>Terminer</button>
                     </>
                   )}
                 </div>
@@ -4174,17 +4223,17 @@ export default function App() {
                         )}
                       </div>
                       {companyLogo && companyEditMode && !isLocked && canDelete && (
-                        <button type="button" onClick={() => { companyDirtyRef.current.add('is_logo'); setCompanyLogo(null); }} className="no-print admin-delete-action" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 4, fontSize: 'inherit', padding: '2px 6px', cursor: 'pointer', fontWeight: 700, marginTop: 3 }}>{t.deleteLogo}</button>
+                        <button type="button" onClick={() => { markCompanyDirty('is_logo'); setCompanyLogo(null); }} className="no-print admin-delete-action" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 4, fontSize: 'inherit', padding: '2px 6px', cursor: 'pointer', fontWeight: 700, marginTop: 3 }}>{t.deleteLogo}</button>
                       )}
                     </div>
                     <div className="print-company-details" style={{ flex: 1 }}>
-                      <input value={companyName} onChange={e => { companyDirtyRef.current.add('is_company_name'); setCompanyName(e.target.value); }} placeholder={t.companyPlaceholder}
+                      <input value={companyName} onChange={e => { markCompanyDirty('is_company_name'); setCompanyName(e.target.value); }} placeholder={t.companyPlaceholder}
                         style={{ ...S.input, fontSize: 24, fontWeight: 900, color: theme.btn, marginBottom: 5 }} readOnly={!companyEditMode || isLocked} />
-                      <input value={companyAddress} onChange={e => { companyDirtyRef.current.add('is_company_address'); setCompanyAddress(e.target.value); }} placeholder={t.addressPlaceholder}
+                      <input value={companyAddress} onChange={e => { markCompanyDirty('is_company_address'); setCompanyAddress(e.target.value); }} placeholder={t.addressPlaceholder}
                         style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={!companyEditMode || isLocked} />
-                      <input value={companyPhone} onChange={e => { companyDirtyRef.current.add('is_company_phone'); setCompanyPhone(e.target.value); }} placeholder={t.phonePlaceholder}
+                      <input value={companyPhone} onChange={e => { markCompanyDirty('is_company_phone'); setCompanyPhone(e.target.value); }} placeholder={t.phonePlaceholder}
                         style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={!companyEditMode || isLocked} />
-                      <input value={companyEmail} onChange={e => { companyDirtyRef.current.add('is_company_email'); setCompanyEmail(e.target.value); }} placeholder="Email..."
+                      <input value={companyEmail} onChange={e => { markCompanyDirty('is_company_email'); setCompanyEmail(e.target.value); }} placeholder="Email..."
                         style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={!companyEditMode || isLocked} />
                     </div>
                   </div>
@@ -4419,7 +4468,7 @@ export default function App() {
                 {/* FOOTER RÉGLEMENTAIRE */}
                 <div className="print-legal-box" style={{ border: '1px solid #cbd5e1', borderRadius: 6, padding: '5px 10px', background: '#f8fafc', marginTop: 'auto' }}>
                   <div style={{ fontSize: 'inherit', fontWeight: 800, color: theme.btn, textAlign: 'center', borderBottom: '1px dashed #cbd5e1', paddingBottom: 3, marginBottom: 3 }}>⚖️ {t.footerLabel}</div>
-                  <textarea value={companyFooter} onChange={e => { companyDirtyRef.current.add('is_footer'); setCompanyFooter(e.target.value); }} rows={2}
+                  <textarea value={companyFooter} onChange={e => { markCompanyDirty('is_footer'); setCompanyFooter(e.target.value); }} rows={2}
                     style={{ ...S.input, fontSize: 'inherit', lineHeight: 1.4, background: 'transparent', resize: 'none', textAlign: 'center', minHeight: 28 }} readOnly={!companyEditMode || isLocked} />
                   <div className="print-only print-legal-text">{companyFooter || 'Saisissez vos informations réglementaires.'}</div>
                 </div>
