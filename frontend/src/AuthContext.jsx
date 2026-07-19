@@ -150,6 +150,28 @@ export function AuthProvider({ children }) {
     }
   }, [emitOrganizationChange]);
 
+  const saveCompanyData = useCallback(async (scope, data) => {
+    activeWritesRef.current += 1;
+    try {
+      const result = await api.request(`/data/company-settings/${encodeURIComponent(scope)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      setSyncError(null);
+      return result.settings || {};
+    } catch (error) {
+      setSyncError(error.message || 'Sauvegarde entreprise impossible');
+      throw error;
+    } finally {
+      activeWritesRef.current = Math.max(0, activeWritesRef.current - 1);
+      if (activeWritesRef.current === 0 && deferredRealtimeRef.current) {
+        const payload = deferredRealtimeRef.current;
+        deferredRealtimeRef.current = null;
+        window.setTimeout(() => emitOrganizationChange(payload), 0);
+      }
+    }
+  }, [emitOrganizationChange]);
+
   const loadData = useCallback(async () => {
     try {
       const res = await fetch('/api/data/load', {
@@ -166,7 +188,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, hasRole, hasDept, saveData, loadData, organization, realtimeStatus, realtimeRevision, syncError }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, hasRole, hasDept, saveData, saveCompanyData, loadData, organization, realtimeStatus, realtimeRevision, syncError }}>
       {children}
     </AuthContext.Provider>
   );

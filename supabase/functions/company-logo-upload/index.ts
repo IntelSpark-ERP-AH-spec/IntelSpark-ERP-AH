@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 
 const allowedOrigins = new Set([
   'https://intelspark-erp-ah.netlify.app',
+  'https://tourmaline-crostata-f9cf29.netlify.app',
   'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174',
 ]);
 for (const key of ['APP_PUBLIC_URL', 'URL', 'SITE_URL']) {
@@ -29,9 +30,12 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(req) });
   if (req.method !== 'POST') return json(req, { error: 'Méthode refusée' }, 405);
 
+  const requestOrigin = (req.headers.get('origin') || '').replace(/\/$/, '');
+  if (!allowedOrigins.has(requestOrigin)) return json(req, { error: 'Origine refusée' }, 403);
+
   const authorization = req.headers.get('authorization') || '';
   if (!authorization.startsWith('Bearer ')) return json(req, { error: 'Authentification requise' }, 401);
-  const appUrl = (Deno.env.get('APP_PUBLIC_URL') || 'https://intelspark-erp-ah.netlify.app').replace(/\/$/, '');
+  const appUrl = requestOrigin || (Deno.env.get('APP_PUBLIC_URL') || 'https://tourmaline-crostata-f9cf29.netlify.app').replace(/\/$/, '');
   const identityResponse = await fetch(`${appUrl}/api/auth/me`, {
     headers: { Authorization: authorization, 'X-Requested-With': 'XMLHttpRequest' },
   }).catch(() => null);
@@ -49,15 +53,20 @@ Deno.serve(async (req: Request) => {
   if (!extension) return json(req, { error: 'Format interdit' }, 415);
   if (file.size > 2 * 1024 * 1024) return json(req, { error: 'Logo limité à 2 Mo' }, 413);
 
+  const kind = new URL(req.url).searchParams.get('kind') || 'logo';
+  if (!['logo', 'brand'].includes(kind)) return json(req, { error: 'Type image invalide' }, 400);
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
-  const objectPath = `${user.organization_id}/company-logo.${extension}`;
+  const objectPath = kind === 'brand'
+    ? `${user.organization_id}/brands/${crypto.randomUUID()}.${extension}`
+    : `${user.organization_id}/company-logo.${extension}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { error } = await supabase.storage.from('company-assets').upload(objectPath, bytes, {
-    contentType: file.type, upsert: true, cacheControl: '3600',
+    contentType: file.type, upsert: kind === 'logo', cacheControl: '3600',
   });
   if (error) return json(req, { error: 'Stockage logo indisponible' }, 500);
   const { data } = supabase.storage.from('company-assets').getPublicUrl(objectPath);
@@ -65,7 +74,7 @@ Deno.serve(async (req: Request) => {
 
   // Draft uploads only place the file in Storage. The settings/document rows
   // are written by the explicit company save button in the application.
-  const shouldPersist = new URL(req.url).searchParams.get('persist') !== '0';
+  const shouldPersist = kind === 'logo' && new URL(req.url).searchParams.get('persist') !== '0';
   if (!shouldPersist) return json(req, { url: `${logoUrl}?v=${Date.now()}` });
 
   // Persist the canonical URL from the trusted function as part of the same

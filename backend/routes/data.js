@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbQuery, dbRun, dbTransaction } from '../db.js';
-import { authMiddleware } from '../auth.js';
+import { authMiddleware, requireRole } from '../auth.js';
 import { ensureOrganizationForUser, isUserPrivateDataKey, organizationContextForUser } from '../organization.js';
 
 const router = Router();
@@ -71,6 +71,86 @@ const COMPANY_KEY_TO_COLUMN = Object.freeze({
   is_logo: 'logo_url',
   is_brands: 'brands_json',
 });
+
+const COMPANY_SCOPE_KEYS = Object.freeze({
+  identity: ['is_company_name', 'is_company_address', 'is_company_phone', 'is_company_email', 'is_logo'],
+  branding: ['is_footer', 'is_brands'],
+  all: Object.keys(COMPANY_KEY_TO_COLUMN),
+});
+
+const COMPANY_TEXT_LIMITS = Object.freeze({
+  is_company_name: 200,
+  is_company_address: 500,
+  is_company_phone: 100,
+  is_company_email: 254,
+  is_footer: 5000,
+});
+
+function companyAssetBaseUrl() {
+  const supabaseUrl = String(
+    process.env.SUPABASE_URL
+      || process.env.VITE_SUPABASE_URL
+      || 'https://hozhnlzgbccrkdluqjcg.supabase.co',
+  ).replace(/\/$/, '');
+  return `${supabaseUrl}/storage/v1/object/public/company-assets/`;
+}
+
+function normalizeCompanyAssetUrl(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const candidate = String(value).trim();
+  if (!candidate || candidate.length > 2048) throw new Error('URL image invalide');
+  let parsed;
+  let expected;
+  try {
+    parsed = new URL(candidate);
+    expected = new URL(companyAssetBaseUrl());
+  } catch {
+    throw new Error('URL image invalide');
+  }
+  if (parsed.protocol !== 'https:' || parsed.origin !== expected.origin || !parsed.pathname.startsWith(expected.pathname)) {
+    throw new Error('Image hors stockage entreprise');
+  }
+  return candidate;
+}
+
+function normalizeCompanySettings(scope, body) {
+  const keys = COMPANY_SCOPE_KEYS[scope];
+  if (!keys || !body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('Paramètres entreprise invalides');
+  }
+  const result = {};
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    if (COMPANY_TEXT_LIMITS[key]) {
+      const text = String(body[key] ?? '').trim();
+      if (text.length > COMPANY_TEXT_LIMITS[key]) throw new Error(`Valeur trop longue: ${key}`);
+      result[key] = text;
+      continue;
+    }
+    if (key === 'is_logo') {
+      result[key] = normalizeCompanyAssetUrl(body[key]);
+      continue;
+    }
+    if (key === 'is_brands') {
+      if (!Array.isArray(body[key]) || body[key].length > 64) throw new Error('Liste des marques invalide');
+      result[key] = body[key].map((brand, index) => {
+        if (!brand || typeof brand !== 'object' || Array.isArray(brand)) throw new Error('Marque invalide');
+        const name = String(brand.name || '').trim().slice(0, 100);
+        return {
+          id: String(brand.id || `brand-${index + 1}`).slice(0, 100),
+          ...(name ? { name } : {}),
+          logo: normalizeCompanyAssetUrl(brand.logo),
+        };
+      });
+    }
+  }
+  if (!Object.keys(result).length) throw new Error('Aucune donnée entreprise reçue');
+  return result;
+}
+
+function hasCompanyKeys(data) {
+  return Object.keys(data || {}).some((key) => Boolean(COMPANY_KEY_TO_COLUMN[key]));
+}
 
 function getOrganizationDocument(organizationId, key) {
   const row = dbGet('SELECT value_json FROM organization_documents WHERE organization_id = ? AND key = ?', [organizationId, key]);
@@ -185,6 +265,9 @@ router.post('/save', async (req, res) => {
     }
     const keys = Object.keys(data);
     if (keys.length > 100) return res.status(400).json({ error: `Trop de clés (max 100)` });
+    if (req.user.role !== 'admin' && hasCompanyKeys(data)) {
+      return res.status(403).json({ error: 'Paramètres entreprise réservés à l’administrateur' });
+    }
     for (const [k, v] of Object.entries(data)) {
       if (!KEY_RE.test(k)) return res.status(400).json({ error: `Nom de clé invalide: ${k}` });
       const jsonStr = JSON.stringify(v);
@@ -228,6 +311,29 @@ router.get('/context', (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.put('/company-settings/:scope', requireRole('admin'), (req, res) => {
+  try {
+    const scope = String(req.params.scope || '').toLowerCase();
+    const values = normalizeCompanySettings(scope, req.body);
+    const organization = ensureOrganizationForUser(req.user.id);
+    dbTransaction(() => {
+      for (const [key, value] of Object.entries(values)) {
+        setCompanySetting(organization.id, key, value, req.user.id);
+      }
+    });
+    res.json({
+      success: true,
+      scope,
+      organization_id: organization.id,
+      settings: readCompanySettings(organization.id),
+    });
+  } catch (error) {
+    const status = /invalide|trop longue|hors stockage|Aucune donnée/i.test(error.message) ? 400 : 500;
+    console.error('[company_settings PUT]', error);
+    res.status(status).json({ error: error.message || 'Sauvegarde entreprise impossible' });
+  }
+});
+
 // ── Endpoints optimisés par clé (utilisés par useUserDoc) ────────────────────
 router.get('/doc/:key', async (req, res) => {
   try {
@@ -268,6 +374,9 @@ router.put('/doc/:key', async (req, res) => {
     if (jsonStr.length > MAX_VALUE_BYTES) return res.status(400).json({ error: 'Valeur trop grande' });
 
     const key = req.params.key;
+    if (COMPANY_KEY_TO_COLUMN[key] && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Paramètres entreprise réservés à l’administrateur' });
+    }
     const organization = ensureOrganizationForUser(req.user.id);
     if (isUserPrivateDataKey(key)) setDocument(req.user.id, key, value);
     else if (!setCompanySetting(organization.id, key, value, req.user.id)) setOrganizationDocument(organization.id, req.user.id, key, value);
@@ -282,6 +391,9 @@ router.delete('/doc/:key', async (req, res) => {
   try {
     if (!KEY_RE.test(req.params.key)) return res.status(400).json({ error: 'Clé invalide' });
     const key = req.params.key;
+    if (COMPANY_KEY_TO_COLUMN[key] && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Paramètres entreprise réservés à l’administrateur' });
+    }
     const organization = ensureOrganizationForUser(req.user.id);
     if (isUserPrivateDataKey(key)) dbRun('DELETE FROM user_documents WHERE user_id = ? AND key = ?', [req.user.id, key]);
     else if (COMPANY_KEY_TO_COLUMN[key]) setCompanySetting(organization.id, key, key === 'is_brands' ? [] : null, req.user.id);

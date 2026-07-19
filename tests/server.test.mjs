@@ -449,13 +449,27 @@ test('production server supports one hundred authenticated users', { timeout: 60
     const [commercialToken, magasinierToken, accountantToken, supervisedTargetToken] = stockRoleUsers.map(signUserToken);
     const sharedAdminToken = signUserToken(sharedAdminUser);
 
-    const saveSharedAdminBranding = await fetch(`${baseUrl}/api/data/save`, {
-      method: 'POST',
+    const sharedLogoUrl = 'https://hozhnlzgbccrkdluqjcg.supabase.co/storage/v1/object/public/company-assets/org_default/company-logo.png?v=1';
+    const sharedBrandUrl = 'https://hozhnlzgbccrkdluqjcg.supabase.co/storage/v1/object/public/company-assets/org_default/brands/shared-brand.png';
+    const saveSharedAdminIdentity = await fetch(`${baseUrl}/api/data/company-settings/identity`, {
+      method: 'PUT',
       headers: writeHeaders,
       body: JSON.stringify({
         is_company_name: 'IntelSpark ERP-AH',
-        is_logo: 'data:image/png;base64,shared-logo',
-        is_brands: [{ name: 'Marque partagee', logo: 'data:image/png;base64,brand-logo' }],
+        is_company_address: 'Casablanca',
+        is_company_phone: '+212500000000',
+        is_company_email: 'contact@intelspark.test',
+        is_logo: sharedLogoUrl,
+      }),
+    });
+    assert.equal(saveSharedAdminIdentity.status, 200, output);
+    assert.equal((await saveSharedAdminIdentity.json()).settings.is_logo, sharedLogoUrl);
+    const saveSharedAdminBranding = await fetch(`${baseUrl}/api/data/company-settings/branding`, {
+      method: 'PUT',
+      headers: writeHeaders,
+      body: JSON.stringify({
+        is_footer: 'Mentions légales partagées',
+        is_brands: [{ id: 'shared-brand', name: 'Marque partagée', logo: sharedBrandUrl }],
       }),
     });
     assert.equal(saveSharedAdminBranding.status, 200, output);
@@ -465,8 +479,19 @@ test('production server supports one hundred authenticated users', { timeout: 60
     assert.equal(sharedAdminLoad.status, 200, output);
     const sharedAdminData = await sharedAdminLoad.json();
     assert.equal(sharedAdminData.is_company_name, 'IntelSpark ERP-AH');
-    assert.equal(sharedAdminData.is_logo, 'data:image/png;base64,shared-logo');
-    assert.deepEqual(sharedAdminData.is_brands, [{ name: 'Marque partagee', logo: 'data:image/png;base64,brand-logo' }]);
+    assert.equal(sharedAdminData.is_logo, sharedLogoUrl);
+    assert.equal(sharedAdminData.is_footer, 'Mentions légales partagées');
+    assert.deepEqual(sharedAdminData.is_brands, [{ id: 'shared-brand', name: 'Marque partagée', logo: sharedBrandUrl }]);
+
+    const nonAdminCompanyWrite = await fetch(`${baseUrl}/api/data/company-settings/identity`, {
+      method: 'PUT',
+      headers: {
+        ...writeHeaders,
+        authorization: `Bearer ${commercialToken}`,
+      },
+      body: JSON.stringify({ is_company_name: 'Modification refusée' }),
+    });
+    assert.equal(nonAdminCompanyWrite.status, 403, output);
 
     const secondaryAdminWrite = await fetch(`${baseUrl}/api/data/doc/admin_sync_probe`, {
       method: 'PUT',

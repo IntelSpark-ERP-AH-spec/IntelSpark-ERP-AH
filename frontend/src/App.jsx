@@ -1980,7 +1980,7 @@ const BulletinsPage = ({ t, language }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const { user, loading, logout, saveData, loadData, hasRole, organization, realtimeStatus, realtimeRevision, syncError } = useAuth();
+  const { user, loading, logout, saveData, saveCompanyData, loadData, hasRole, organization, realtimeStatus, realtimeRevision, syncError } = useAuth();
   const { connect, disconnect, onlineUsers, connected, lastNotification } = useWS();
   const i18n = useAppI18n();
   const canDelete = hasRole('admin');
@@ -3293,11 +3293,12 @@ export default function App() {
     notify(fmt(t.clientInfoFormat, client.name), 'info');
   };
 
-  const uploadCompanyLogo = useCallback(async (file, { persist = true } = {}) => {
+  const uploadCompanyAsset = useCallback(async (file, { persist = false, kind = 'logo' } = {}) => {
       if (!organization?.logo_upload_url) throw new Error('Stockage logo indisponible');
       const body = new FormData();
       body.append('file', file);
       const uploadUrl = new URL(organization.logo_upload_url, window.location.origin);
+      uploadUrl.searchParams.set('kind', kind);
       if (!persist) uploadUrl.searchParams.set('persist', '0');
       const response = await fetch(uploadUrl.toString(), {
         method: 'POST', body,
@@ -3317,7 +3318,7 @@ export default function App() {
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
     if (!allowed.includes(file.type)) return notify('Format non supporté (PNG, JPG, WebP, SVG uniquement)', 'error');
     try {
-      const url = await uploadCompanyLogo(file, { persist: false });
+      const url = await uploadCompanyAsset(file, { persist: false, kind: 'logo' });
       companyDirtyRef.current.add('is_logo');
       setCompanyLogo(url);
       notify('Logo ajouté. Cliquez sur « Enregistrer » pour confirmer.', 'info');
@@ -3325,21 +3326,24 @@ export default function App() {
     finally { e.target.value = ''; }
   };
 
-  const handleBrandLogoUpload = (e) => {
+  const handleBrandLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!companyEditMode || isLocked) return notify('Cliquez sur « Éditer » avant de modifier les marques', 'info');
     if (file.size > 2 * 1024 * 1024) return notify('Logo trop volumineux (max 2 Mo)', 'error');
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
     if (!allowed.includes(file.type)) return notify('Format non supporté', 'error');
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const next = [...brands, { id: Date.now(), logo: ev.target.result }];
+    try {
+      const url = await uploadCompanyAsset(file, { persist: false, kind: 'brand' });
+      const next = [...brands, { id: crypto.randomUUID(), logo: url }];
       companyDirtyRef.current.add('is_brands');
       setBrands(next);
       notify('Logo de marque ajouté. Cliquez sur « Enregistrer » pour confirmer.', 'info');
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+      notify(error.message || 'Envoi impossible', 'error');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const removeBrand = async (id) => {
@@ -3494,16 +3498,14 @@ export default function App() {
           is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
           is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo, is_brands: brands,
         };
-    const payload = {
-      ...values,
-      is_admin_shared_initialized: true,
-    };
     setCompanySaving(true);
-    Object.keys(payload).forEach(key => companyDirtyRef.current.add(key));
+    Object.keys(values).forEach(key => companyDirtyRef.current.add(key));
     try {
-      const saved = await saveData(payload);
-      if (!saved) throw new Error('Sauvegarde impossible');
-      Object.entries(payload).forEach(([key, value]) => {
+      const savedSettings = await saveCompanyData(scope, values);
+      const canonicalValues = Object.fromEntries(
+        Object.keys(values).map(key => [key, savedSettings[key]]),
+      );
+      Object.entries(canonicalValues).forEach(([key, value]) => {
         lastSyncedData.current.set(key, JSON.stringify(value));
         companyDirtyRef.current.delete(key);
       });
@@ -3515,7 +3517,7 @@ export default function App() {
     } finally {
       setCompanySaving(false);
     }
-  }, [companySaving, user, companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands, saveData, notify]);
+  }, [companySaving, user, companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands, saveCompanyData, notify]);
 
   const applyServerData = useCallback((serverData, options = {}) => {
     if (!serverData || typeof serverData !== 'object') return;
@@ -3593,7 +3595,7 @@ export default function App() {
           if (key === 'is_logo' && typeof localValue === 'string' && localValue.startsWith('data:image/')) {
             try {
               const blob = await fetch(localValue).then(response => response.blob());
-              localValue = await uploadCompanyLogo(new File([blob], 'company-logo', { type: blob.type }));
+              localValue = await uploadCompanyAsset(new File([blob], 'company-logo', { type: blob.type }), { persist: false, kind: 'logo' });
             } catch { localValue = null; }
           }
           if (!hasMeaningfulSyncValue(serverData[key]) && hasMeaningfulSyncValue(localValue)) legacySeed[key] = localValue;
@@ -3626,7 +3628,7 @@ export default function App() {
       setServerSyncReady(true);
     })();
     return () => { cancelled = true; };
-  }, [user?.id, user?.role, organization?.id, loadData, saveData, applyServerData, uploadCompanyLogo]);
+  }, [user?.id, user?.role, organization?.id, loadData, saveData, applyServerData, uploadCompanyAsset]);
 
   useEffect(() => {
     if (!serverSyncReady || !realtimeRevision || catalogDirtyRef.current) return;
