@@ -93,3 +93,6 @@ code-review-graph/
 
 # Local user registry
 src/users.json
+
+# Local Netlify folder
+.netlify

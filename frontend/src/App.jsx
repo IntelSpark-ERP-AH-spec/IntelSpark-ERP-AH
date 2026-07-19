@@ -2175,6 +2175,8 @@ export default function App() {
   const [companyEmail, setCompanyEmail] = useState(() => ls.get('is_company_email', ''));
   const [companyFooter, setCompanyFooter] = useState(() => ls.get('is_footer', ''));
   const [brands, setBrands] = useState(() => ls.getJSON('is_brands', []));
+  const [companyEditMode, setCompanyEditMode] = useState(false);
+  const [companySaving, setCompanySaving] = useState(false);
 
   const [documentType, setDocumentType] = useState(() => ls.get('is_doc_type', 'DEV'));
   const [requestedDocumentType, setRequestedDocumentType] = useState(null);
@@ -3291,11 +3293,13 @@ export default function App() {
     notify(fmt(t.clientInfoFormat, client.name), 'info');
   };
 
-  const uploadCompanyLogo = useCallback(async (file) => {
+  const uploadCompanyLogo = useCallback(async (file, { persist = true } = {}) => {
       if (!organization?.logo_upload_url) throw new Error('Stockage logo indisponible');
       const body = new FormData();
       body.append('file', file);
-      const response = await fetch(organization.logo_upload_url, {
+      const uploadUrl = new URL(organization.logo_upload_url, window.location.origin);
+      if (!persist) uploadUrl.searchParams.set('persist', '0');
+      const response = await fetch(uploadUrl.toString(), {
         method: 'POST', body,
         headers: { Authorization: `Bearer ${getAuthToken()}` },
       });
@@ -3307,16 +3311,16 @@ export default function App() {
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!companyEditMode || isLocked) return notify('Cliquez sur « Éditer » avant de modifier le logo', 'info');
     const maxSize = 2 * 1024 * 1024;
     if (file.size > maxSize) return notify('Logo trop volumineux (max 2 Mo)', 'error');
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
     if (!allowed.includes(file.type)) return notify('Format non supporté (PNG, JPG, WebP, SVG uniquement)', 'error');
     try {
-      const url = await uploadCompanyLogo(file);
+      const url = await uploadCompanyLogo(file, { persist: false });
+      companyDirtyRef.current.add('is_logo');
       setCompanyLogo(url);
-      const saved = await saveData({ is_logo: url });
-      if (!saved) throw new Error('Sauvegarde impossible');
-      notify('Logo synchronisé', 'success');
+      notify('Logo ajouté. Cliquez sur « Enregistrer » pour confirmer.', 'info');
     } catch (error) { notify(error.message || 'Envoi impossible', 'error'); }
     finally { e.target.value = ''; }
   };
@@ -3324,32 +3328,36 @@ export default function App() {
   const handleBrandLogoUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!companyEditMode || isLocked) return notify('Cliquez sur « Éditer » avant de modifier les marques', 'info');
     if (file.size > 2 * 1024 * 1024) return notify('Logo trop volumineux (max 2 Mo)', 'error');
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
     if (!allowed.includes(file.type)) return notify('Format non supporté', 'error');
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setBrands(prev => [...prev, { id: Date.now(), logo: ev.target.result }]);
-      notify('Logo ajouté', 'success');
+    reader.onload = async (ev) => {
+      const next = [...brands, { id: Date.now(), logo: ev.target.result }];
+      companyDirtyRef.current.add('is_brands');
+      setBrands(next);
+      notify('Logo de marque ajouté. Cliquez sur « Enregistrer » pour confirmer.', 'info');
     };
     reader.readAsDataURL(file);
   };
 
-  const removeBrand = (id) => {
-    setBrands(prev => prev.filter(b => b.id !== id));
-    notify('Marque supprimée', 'info');
+  const removeBrand = async (id) => {
+    const next = brands.filter(b => b.id !== id);
+    companyDirtyRef.current.add('is_brands');
+    setBrands(next);
+    notify('Marque supprimée localement. Cliquez sur « Enregistrer » pour confirmer.', 'info');
   };
 
-  const moveBrand = (id, dir) => {
-    setBrands(prev => {
-      const idx = prev.findIndex(b => b.id === id);
-      if (idx === -1) return prev;
-      const next = [...prev];
-      const target = idx + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[idx], next[target]] = [next[target], next[idx]];
-      return next;
-    });
+  const moveBrand = async (id, dir) => {
+    const idx = brands.findIndex(b => b.id === id);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= brands.length) return;
+    const next = [...brands];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    companyDirtyRef.current.add('is_brands');
+    setBrands(next);
+    notify('Ordre modifié localement. Cliquez sur « Enregistrer » pour confirmer.', 'info');
   };
 
   const S = {
@@ -3448,16 +3456,93 @@ export default function App() {
   const syncTimer = useRef(null);
   const mounted = useRef(false);
   const lastSyncedData = useRef(new Map());
+  // Protect local company edits from stale Realtime snapshots.
+  const companyDirtyRef = useRef(new Set());
+  // Latest local draft, read by the stable server-apply callback.  A remote
+  // snapshot must not replace a key that has changed locally since the last
+  // successful save.
+  const syncStateRef = useRef({});
+  syncStateRef.current = {
+    is_theme: activeTheme, is_lang: language, is_currency: currencyKey,
+    is_font_size: String(globalFontSize), is_font_family: globalFontFamily, is_font_color: globalFontColor,
+    is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
+    is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo,
+    is_brands: brands, is_catalog: catalog, is_items: items, is_leads: leads, is_clients: clients,
+    is_saved_docs: savedDocs, is_history_log: documentHistory,
+    is_doc_type: documentType, is_doc_num: documentNumber, is_doc_status: documentStatus,
+    is_doc_date: documentDate, is_validity_date: validityDate, is_client: clientDetails,
+    is_client_ice: clientICE, is_rep: representative, is_supplier: supplierName,
+    is_order_ref: orderRef, is_source_devis: sourceDevisNumber, is_payment: paymentMethod,
+    is_due_date: paymentDueDate, is_parent_fact: parentFactRef,
+    is_counter_DEV: counterValue('DEV'), is_counter_BL: counterValue('BL'),
+    is_counter_BC: counterValue('BC'), is_counter_FACT: counterValue('FACT'),
+    is_counter_AVOIR: counterValue('AVOIR'),
+  };
   const [serverSyncReady, setServerSyncReady] = useState(false);
 
-  const applyServerData = useCallback((serverData) => {
-    if (!serverData || typeof serverData !== 'object') return;
-    const assign = (key, setter) => {
-      if (Object.prototype.hasOwnProperty.call(serverData, key)) setter(serverData[key]);
+  const saveCompanySettings = useCallback(async (scope = 'all') => {
+    if (companySaving || !user) return false;
+    if (syncTimer.current) {
+      clearTimeout(syncTimer.current);
+      syncTimer.current = null;
+    }
+    const values = scope === 'branding'
+      ? { is_footer: companyFooter, is_brands: brands }
+      : scope === 'identity'
+        ? { is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone, is_company_email: companyEmail, is_logo: companyLogo }
+        : {
+          is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
+          is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo, is_brands: brands,
+        };
+    const payload = {
+      ...values,
+      is_admin_shared_initialized: true,
     };
-    assign('is_company_name', setCompanyName); assign('is_company_address', setCompanyAddress);
-    assign('is_company_phone', setCompanyPhone); assign('is_company_email', setCompanyEmail);
-    assign('is_footer', setCompanyFooter); assign('is_logo', setCompanyLogo); assign('is_brands', setBrands);
+    setCompanySaving(true);
+    Object.keys(payload).forEach(key => companyDirtyRef.current.add(key));
+    try {
+      const saved = await saveData(payload);
+      if (!saved) throw new Error('Sauvegarde impossible');
+      Object.entries(payload).forEach(([key, value]) => {
+        lastSyncedData.current.set(key, JSON.stringify(value));
+        companyDirtyRef.current.delete(key);
+      });
+      notify('Paramètres de l’entreprise enregistrés et synchronisés', 'success');
+      return true;
+    } catch (error) {
+      notify(error.message || 'Sauvegarde impossible', 'error');
+      return false;
+    } finally {
+      setCompanySaving(false);
+    }
+  }, [companySaving, user, companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands, saveData, notify]);
+
+  const applyServerData = useCallback((serverData, options = {}) => {
+    if (!serverData || typeof serverData !== 'object') return;
+    const force = options.force === true;
+    const assign = (key, setter) => {
+      if (!Object.prototype.hasOwnProperty.call(serverData, key)) return false;
+      // Initial hydration is authoritative. On later Realtime/focus reloads,
+      // preserve a draft that diverged from the last acknowledged value.
+      if (!force) {
+        const baseline = lastSyncedData.current.get(key);
+        const localValue = syncStateRef.current[key];
+        if (baseline !== undefined && JSON.stringify(localValue) !== baseline) return false;
+        // A key absent from the first server payload still has a local draft
+        // that syncToServer is about to upload. Preserve that meaningful draft
+        // if a late/partial remote payload happens to include an older value.
+        if (baseline === undefined && hasMeaningfulSyncValue(localValue)) return false;
+      }
+      setter(serverData[key]);
+      lastSyncedData.current.set(key, JSON.stringify(serverData[key]));
+      return true;
+    };
+    const assignCompany = (key, setter) => {
+      if (!companyDirtyRef.current.has(key)) assign(key, setter);
+    };
+    assignCompany('is_company_name', setCompanyName); assignCompany('is_company_address', setCompanyAddress);
+    assignCompany('is_company_phone', setCompanyPhone); assignCompany('is_company_email', setCompanyEmail);
+    assignCompany('is_footer', setCompanyFooter); assignCompany('is_logo', setCompanyLogo); assignCompany('is_brands', setBrands);
     if (!catalogDirtyRef.current) assign('is_catalog', value => setCatalogState(Array.isArray(value) ? value : []));
     assign('is_items', setItems); assign('is_leads', setLeads); assign('is_clients', setClients);
     assign('is_doc_type', setDocumentType); assign('is_doc_num', setDocumentNumber);
@@ -3468,10 +3553,24 @@ export default function App() {
     assign('is_source_devis', setSourceDevisNumber); assign('is_payment', setPaymentMethod);
     assign('is_due_date', setPaymentDueDate); assign('is_parent_fact', setParentFactRef);
     for (const type of ['DEV', 'BL', 'BC', 'FACT', 'AVOIR']) {
-      if (Object.prototype.hasOwnProperty.call(serverData, `is_counter_${type}`)) setCounterValue(type, serverData[`is_counter_${type}`]);
+      assign(`is_counter_${type}`, value => setCounterValue(type, value));
     }
-    for (const [key, value] of Object.entries(serverData)) lastSyncedData.current.set(key, JSON.stringify(value));
+    // Keep metadata (for example _sync) without changing the baseline of a
+    // form key that was skipped because it contains a local draft.
+    for (const [key, value] of Object.entries(serverData)) {
+      if (!Object.prototype.hasOwnProperty.call(syncStateRef.current, key)) {
+        lastSyncedData.current.set(key, JSON.stringify(value));
+      }
+    }
   }, []);
+
+  const finishCompanyEdit = useCallback(async () => {
+    setCompanyEditMode(false);
+    setEditMode(false);
+    companyDirtyRef.current.clear();
+    const serverData = await loadData();
+    if (serverData) applyServerData(serverData, { force: true });
+  }, [loadData, applyServerData]);
 
   useEffect(() => {
     if (!user || !organization) {
@@ -3483,12 +3582,14 @@ export default function App() {
     mounted.current = false;
     setServerSyncReady(false);
     (async () => {
+      const seedKeys = [...new Set([...ADMIN_SHARED_SEED_KEYS, ...COMPANY_SYNC_KEYS])];
+      const localSeedSnapshot = new Map(seedKeys.map(key => [key, readLocalSyncValue(key)]));
       let serverData = await loadData();
       if (cancelled) return;
       if (serverData && user.role === 'admin') {
         const legacySeed = {};
-        for (const key of [...new Set([...ADMIN_SHARED_SEED_KEYS, ...COMPANY_SYNC_KEYS])]) {
-          let localValue = readLocalSyncValue(key);
+        for (const key of seedKeys) {
+          let localValue = localSeedSnapshot.get(key);
           if (key === 'is_logo' && typeof localValue === 'string' && localValue.startsWith('data:image/')) {
             try {
               const blob = await fetch(localValue).then(response => response.blob());
@@ -3504,9 +3605,21 @@ export default function App() {
         }
       }
       if (cancelled) return;
-      applyServerData(serverData);
+      const effectiveServerData = { ...(serverData || {}) };
+      const pendingLocalKeys = [];
+      for (const key of COMPANY_SYNC_KEYS) {
+        const localValue = localSeedSnapshot.get(key);
+        if (!hasMeaningfulSyncValue(effectiveServerData[key]) && hasMeaningfulSyncValue(localValue)) {
+          effectiveServerData[key] = localValue;
+          pendingLocalKeys.push(key);
+        }
+      }
+      applyServerData(effectiveServerData, { force: true });
+      for (const key of pendingLocalKeys) lastSyncedData.current.delete(key);
       for (const key of [...RESETTABLE_KEYS, ...ADMIN_SHARED_SEED_KEYS, ...COMPANY_SYNC_KEYS]) {
-        if (key === 'is_logo' && !hasMeaningfulSyncValue(serverData?.is_logo)) continue;
+        if (COMPANY_SYNC_KEYS.has(key)
+          && hasMeaningfulSyncValue(localSeedSnapshot.get(key))
+          && !hasMeaningfulSyncValue(serverData?.[key])) continue;
         try { localStorage.removeItem(key); } catch {}
       }
       mounted.current = true;
@@ -3543,6 +3656,9 @@ export default function App() {
     };
     const changedData = {};
     for (const [key, value] of Object.entries(data)) {
+      // Company identity, logo, brands and legal mentions use explicit save
+      // buttons. Never persist an unfinished draft through the generic timer.
+      if (COMPANY_SYNC_KEYS.has(key)) continue;
       const serialized = JSON.stringify(value);
       if (lastSyncedData.current.get(key) !== serialized) changedData[key] = value;
     }
@@ -3551,6 +3667,7 @@ export default function App() {
       if (!saved) return;
       for (const [key, value] of Object.entries(changedData)) {
         lastSyncedData.current.set(key, JSON.stringify(value));
+        if (COMPANY_SYNC_KEYS.has(key)) companyDirtyRef.current.delete(key);
       }
     });
   }, [
@@ -4021,6 +4138,20 @@ export default function App() {
 
               {/* DOCUMENT IMPRIMABLE */}
               <div ref={documentRef} className="print-card" style={{
+                }}>
+                <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ marginRight: 'auto', fontSize: 12, fontWeight: 800, color: '#64748b' }}>Paramètres de l’entreprise</span>
+                  {!companyEditMode ? (
+                    <button type="button" onClick={() => setCompanyEditMode(true)} style={S.btnGhost}>Éditer</button>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => saveCompanySettings('identity')} disabled={companySaving} style={S.btn('#0d9488')}>Enregistrer logo et coordonnées</button>
+                      <button type="button" onClick={() => saveCompanySettings('branding')} disabled={companySaving} style={S.btn('#2563eb')}>Enregistrer marques et mentions</button>
+                      <button type="button" onClick={finishCompanyEdit} style={S.btnGhost}>Terminer</button>
+                    </>
+                  )}
+                </div>
+                <div className="print-card-content" style={{
                 background: '#fff', width: '100%', maxWidth: '1180px', margin: '0 auto',
                 padding: '6mm 8mm', borderRadius: 8, border: '1px solid #cbd5e1',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.07)', display: 'flex', flexDirection: 'column',
@@ -4031,26 +4162,26 @@ export default function App() {
                 <div className="print-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', paddingBottom: 6, borderBottom: '2px solid #cbd5e1', marginBottom: 6, gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, flex: 1 }}>
                     <div className="print-logo-column" style={{ minWidth: 210 }}>
-                      <div onClick={() => !isLocked && logoInputRef.current.click()} style={{ cursor: !isLocked ? 'pointer' : 'default' }}>
+                      <div onClick={() => companyEditMode && !isLocked && logoInputRef.current.click()} style={{ cursor: companyEditMode && !isLocked ? 'pointer' : 'default' }}>
                         {companyLogo ? (
                           <img src={companyLogo} alt="Logo" style={{ maxHeight: 145, maxWidth: 230, objectFit: 'contain', borderRadius: 6 }} />
                         ) : (
                           <div style={{ background: '#f1f5f9', border: '2px dashed #cbd5e1', borderRadius: 6, padding: '20px 18px', fontSize: 'inherit', color: '#94a3b8', fontWeight: 700, textAlign: 'center', minHeight: 65, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t.addLogo}</div>
                         )}
                       </div>
-                      {companyLogo && !isLocked && canDelete && (
-                        <button onClick={() => setCompanyLogo(null)} className="no-print admin-delete-action" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 4, fontSize: 'inherit', padding: '2px 6px', cursor: 'pointer', fontWeight: 700, marginTop: 3 }}>{t.deleteLogo}</button>
+                      {companyLogo && companyEditMode && !isLocked && canDelete && (
+                        <button type="button" onClick={() => { companyDirtyRef.current.add('is_logo'); setCompanyLogo(null); }} className="no-print admin-delete-action" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 4, fontSize: 'inherit', padding: '2px 6px', cursor: 'pointer', fontWeight: 700, marginTop: 3 }}>{t.deleteLogo}</button>
                       )}
                     </div>
                     <div className="print-company-details" style={{ flex: 1 }}>
-                      <input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder={t.companyPlaceholder}
-                        style={{ ...S.input, fontSize: 24, fontWeight: 900, color: theme.btn, marginBottom: 5 }} readOnly={isLocked} />
-                      <input value={companyAddress} onChange={e => setCompanyAddress(e.target.value)} placeholder={t.addressPlaceholder}
-                        style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={isLocked} />
-                      <input value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} placeholder={t.phonePlaceholder}
-                        style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={isLocked} />
-                      <input value={companyEmail} onChange={e => setCompanyEmail(e.target.value)} placeholder="Email..."
-                        style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={isLocked} />
+                      <input value={companyName} onChange={e => { companyDirtyRef.current.add('is_company_name'); setCompanyName(e.target.value); }} placeholder={t.companyPlaceholder}
+                        style={{ ...S.input, fontSize: 24, fontWeight: 900, color: theme.btn, marginBottom: 5 }} readOnly={!companyEditMode || isLocked} />
+                      <input value={companyAddress} onChange={e => { companyDirtyRef.current.add('is_company_address'); setCompanyAddress(e.target.value); }} placeholder={t.addressPlaceholder}
+                        style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={!companyEditMode || isLocked} />
+                      <input value={companyPhone} onChange={e => { companyDirtyRef.current.add('is_company_phone'); setCompanyPhone(e.target.value); }} placeholder={t.phonePlaceholder}
+                        style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={!companyEditMode || isLocked} />
+                      <input value={companyEmail} onChange={e => { companyDirtyRef.current.add('is_company_email'); setCompanyEmail(e.target.value); }} placeholder="Email..."
+                        style={{ ...S.input, fontSize: 'inherit', color: '#64748b', marginBottom: 2 }} readOnly={!companyEditMode || isLocked} />
                     </div>
                   </div>
                   <div className="print-client-box" style={{ border: '2px solid #cbd5e1', borderRadius: 6, padding: '14px 12px 10px', width: 390, minHeight: 120, background: '#f8fafc', position: 'relative' }}>
@@ -4284,8 +4415,8 @@ export default function App() {
                 {/* FOOTER RÉGLEMENTAIRE */}
                 <div className="print-legal-box" style={{ border: '1px solid #cbd5e1', borderRadius: 6, padding: '5px 10px', background: '#f8fafc', marginTop: 'auto' }}>
                   <div style={{ fontSize: 'inherit', fontWeight: 800, color: theme.btn, textAlign: 'center', borderBottom: '1px dashed #cbd5e1', paddingBottom: 3, marginBottom: 3 }}>⚖️ {t.footerLabel}</div>
-                  <textarea value={companyFooter} onChange={e => setCompanyFooter(e.target.value)} rows={2}
-                    style={{ ...S.input, fontSize: 'inherit', lineHeight: 1.4, background: 'transparent', resize: 'none', textAlign: 'center', minHeight: 28 }} readOnly={isLocked} />
+                  <textarea value={companyFooter} onChange={e => { companyDirtyRef.current.add('is_footer'); setCompanyFooter(e.target.value); }} rows={2}
+                    style={{ ...S.input, fontSize: 'inherit', lineHeight: 1.4, background: 'transparent', resize: 'none', textAlign: 'center', minHeight: 28 }} readOnly={!companyEditMode || isLocked} />
                   <div className="print-only print-legal-text">{companyFooter || 'Saisissez vos informations réglementaires.'}</div>
                 </div>
 
@@ -4298,7 +4429,7 @@ export default function App() {
                     <div className="print-brands-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', alignItems: 'center' }}>
                       {brands.map((b, i) => (
                         <div key={b.id} className="print-brand-item" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          {editMode && !isLocked && (
+                          {companyEditMode && editMode && !isLocked && (
                             <div className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                               <button onClick={() => moveBrand(b.id, -1)} disabled={i === 0} style={{ background: 'none', border: 'none', cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? '#d1d5db' : '#475569', fontSize: 10, padding: 0, lineHeight: 1 }}>▲</button>
                               <button onClick={() => moveBrand(b.id, 1)} disabled={i === brands.length - 1} style={{ background: 'none', border: 'none', cursor: i === brands.length - 1 ? 'default' : 'pointer', color: i === brands.length - 1 ? '#d1d5db' : '#475569', fontSize: 10, padding: 0, lineHeight: 1 }}>▼</button>
@@ -4306,7 +4437,7 @@ export default function App() {
                           )}
                           <div style={{ position: 'relative' }}>
                             <img src={b.logo} alt="logo marque" style={{ height: 30, maxWidth: 80, objectFit: 'contain' }} />
-                            {editMode && !isLocked && canDelete && (
+                            {companyEditMode && editMode && !isLocked && canDelete && (
                               <button onClick={() => removeBrand(b.id)} className="no-print admin-delete-action" title="Supprimer" style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, fontSize: 10, cursor: 'pointer', lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                             )}
                           </div>
@@ -4314,12 +4445,13 @@ export default function App() {
                       ))}
                     </div>
                   )}
-                  {editMode && !isLocked && (
+                  {companyEditMode && editMode && !isLocked && (
                     <div className="no-print" style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', marginTop: brands.length > 0 ? 5 : 0 }}>
                       <button onClick={() => brandInputRef.current.click()} style={S.btn('#0d9488')}>+ Logo</button>
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </div>
           )}
@@ -4755,7 +4887,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
           )}
 
           {/* ============================== STATUT ============================== */}

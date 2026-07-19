@@ -4,10 +4,16 @@ const allowedOrigins = new Set([
   'https://intelspark-erp-ah.netlify.app',
   'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174',
 ]);
+for (const key of ['APP_PUBLIC_URL', 'URL', 'SITE_URL']) {
+  const value = Deno.env.get(key)?.trim().replace(/\/$/, '');
+  if (value) allowedOrigins.add(value);
+}
 
 function cors(req: Request) {
   const origin = req.headers.get('origin') || '';
   return {
+    // Do not emit a wildcard: the upload endpoint accepts authenticated
+    // requests and must only allow the configured application origins.
     'Access-Control-Allow-Origin': allowedOrigins.has(origin) ? origin : 'https://intelspark-erp-ah.netlify.app',
     'Access-Control-Allow-Headers': 'authorization, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -55,5 +61,38 @@ Deno.serve(async (req: Request) => {
   });
   if (error) return json(req, { error: 'Stockage logo indisponible' }, 500);
   const { data } = supabase.storage.from('company-assets').getPublicUrl(objectPath);
-  return json(req, { url: `${data.publicUrl}?v=${Date.now()}` });
+  const logoUrl = data.publicUrl;
+
+  // Draft uploads only place the file in Storage. The settings/document rows
+  // are written by the explicit company save button in the application.
+  const shouldPersist = new URL(req.url).searchParams.get('persist') !== '0';
+  if (!shouldPersist) return json(req, { url: `${logoUrl}?v=${Date.now()}` });
+
+  // Persist the canonical URL from the trusted function as part of the same
+  // operation.  The browser still mirrors it through /api/data/doc/is_logo,
+  // but this server-side write prevents a transient network failure in the
+  // second request from leaving the logo visible on only one device.
+  const updatedBy = Number.isFinite(Number(user.id)) ? Number(user.id) : null;
+  const { error: settingsError } = await supabase.from('company_settings').upsert({
+    organization_id: user.organization_id,
+    logo_url: logoUrl,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'organization_id' });
+  if (settingsError) {
+    await supabase.storage.from('company-assets').remove([objectPath]).catch(() => {});
+    return json(req, { error: 'Persistance du logo indisponible' }, 500);
+  }
+  const { error: documentError } = await supabase.from('organization_documents').upsert({
+    organization_id: user.organization_id,
+    key: 'is_logo',
+    value_json: JSON.stringify(logoUrl),
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'organization_id,key' });
+  if (documentError) {
+    await supabase.storage.from('company-assets').remove([objectPath]).catch(() => {});
+    return json(req, { error: 'Persistance du logo indisponible' }, 500);
+  }
+  return json(req, { url: `${logoUrl}?v=${Date.now()}` });
 });

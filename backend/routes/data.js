@@ -90,14 +90,30 @@ function ensureCompanySettings(organizationId) {
     ON CONFLICT(organization_id) DO NOTHING`, [organizationId]);
 }
 
-function setCompanySetting(organizationId, key, value) {
+/**
+ * Persist company-scoped settings in both the typed settings row and the
+ * generic organization document registry.  Older Supabase deployments may
+ * have the registry populated while company_settings still contains its
+ * defaults (or vice versa); keeping the two representations in lock-step
+ * makes /data/load deterministic for every device.
+ */
+function setCompanySetting(organizationId, key, value, updatedBy = null) {
   const column = COMPANY_KEY_TO_COLUMN[key];
   if (!column) return false;
   ensureCompanySettings(organizationId);
   const stored = key === 'is_brands'
     ? JSON.stringify(value ?? [])
     : (value === null || value === undefined || String(value).trim().toLowerCase() === 'null' ? null : value);
-  dbRun(`UPDATE company_settings SET ${column} = ?, updated_at = datetime('now') WHERE organization_id = ?`, [stored, organizationId]);
+  dbRun(`UPDATE company_settings SET ${column} = ?, updated_by = ?, updated_at = datetime('now') WHERE organization_id = ?`, [stored, updatedBy, organizationId]);
+
+  // Keep the generic document mirror in sync.  This is intentionally done
+  // server-side (rather than relying on browser localStorage) so all admins
+  // and all devices observe the same value after a refresh or realtime event.
+  if (stored === null) {
+    dbRun('DELETE FROM organization_documents WHERE organization_id = ? AND key = ?', [organizationId, key]);
+  } else {
+    setOrganizationDocument(organizationId, updatedBy, key, key === 'is_brands' ? (value ?? []) : stored);
+  }
   return true;
 }
 
@@ -105,12 +121,32 @@ function readCompanySettings(organizationId) {
   const row = dbGet('SELECT * FROM company_settings WHERE organization_id = ?', [organizationId]);
   if (!row) return {};
   const text = value => value === null || value === undefined || String(value).trim().toLowerCase() === 'null' ? '' : String(value);
-  return {
+  const result = {
     is_company_name: text(row.company_name), is_company_address: text(row.company_address),
     is_company_phone: text(row.company_phone), is_company_email: text(row.company_email),
     is_footer: text(row.legal_mentions), is_logo: text(row.logo_url),
     is_brands: parseStoredJson(row.brands_json, []),
   };
+
+  // Repair/read-through for databases migrated before company_settings was
+  // introduced.  If the generic organization document has a newer value,
+  // expose it immediately; the next write mirrors it back into the typed row.
+  const mirrors = dbQuery(
+    `SELECT key, value_json, updated_at FROM organization_documents
+      WHERE organization_id = ? AND key IN (?, ?, ?, ?, ?, ?, ?)`,
+    [organizationId, ...Object.keys(COMPANY_KEY_TO_COLUMN)],
+  );
+  const mirrorByKey = new Map(mirrors.map(entry => [entry.key, entry]));
+  for (const key of Object.keys(COMPANY_KEY_TO_COLUMN)) {
+    const mirror = mirrorByKey.get(key);
+    if (!mirror) continue;
+    const typedUpdated = String(row.updated_at || '');
+    const mirrorUpdated = String(mirror.updated_at || '');
+    if (mirrorUpdated > typedUpdated || result[key] === '' || (key === 'is_brands' && !result[key]?.length)) {
+      result[key] = parseStoredJson(mirror.value_json, key === 'is_brands' ? [] : '');
+    }
+  }
+  return result;
 }
 
 function getDocument(userId, key) {
@@ -158,7 +194,7 @@ router.post('/save', async (req, res) => {
     dbTransaction(() => {
       for (const [key, value] of Object.entries(data)) {
         if (isUserPrivateDataKey(key)) setDocument(req.user.id, key, value);
-        else if (!setCompanySetting(organization.id, key, value)) setOrganizationDocument(organization.id, req.user.id, key, value);
+        else if (!setCompanySetting(organization.id, key, value, req.user.id)) setOrganizationDocument(organization.id, req.user.id, key, value);
       }
     });
     res.json({ success: true, scope: 'organization', organization_id: organization.id });
@@ -234,7 +270,7 @@ router.put('/doc/:key', async (req, res) => {
     const key = req.params.key;
     const organization = ensureOrganizationForUser(req.user.id);
     if (isUserPrivateDataKey(key)) setDocument(req.user.id, key, value);
-    else if (!setCompanySetting(organization.id, key, value)) setOrganizationDocument(organization.id, req.user.id, key, value);
+    else if (!setCompanySetting(organization.id, key, value, req.user.id)) setOrganizationDocument(organization.id, req.user.id, key, value);
     res.json({ success: true, scope: isUserPrivateDataKey(key) ? 'user' : 'organization' });
   } catch (e) {
     console.error('[user_data /doc PUT]', e);
@@ -248,7 +284,7 @@ router.delete('/doc/:key', async (req, res) => {
     const key = req.params.key;
     const organization = ensureOrganizationForUser(req.user.id);
     if (isUserPrivateDataKey(key)) dbRun('DELETE FROM user_documents WHERE user_id = ? AND key = ?', [req.user.id, key]);
-    else if (COMPANY_KEY_TO_COLUMN[key]) setCompanySetting(organization.id, key, key === 'is_brands' ? [] : null);
+    else if (COMPANY_KEY_TO_COLUMN[key]) setCompanySetting(organization.id, key, key === 'is_brands' ? [] : null, req.user.id);
     else dbRun('DELETE FROM organization_documents WHERE organization_id = ? AND key = ?', [organization.id, key]);
     res.json({ success: true });
   } catch (e) {

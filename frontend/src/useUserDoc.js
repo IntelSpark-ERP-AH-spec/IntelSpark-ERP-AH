@@ -28,11 +28,14 @@ export function useUserDoc(key, initial) {
   const [error, setError]     = useState(null);
   const timeoutRef            = useRef(null);
   const lastSavedRef          = useRef(null);
+  const dataRef               = useRef(data);
   const keyRef                = useRef(key);
   const savingRef             = useRef(false);
   const deferredReloadRef     = useRef(false);
 
   useEffect(() => { keyRef.current = key; }, [key]);
+  // Keep latest draft visible to stable organization-change listener.
+  useEffect(() => { dataRef.current = data; }, [data]);
 
   // ── Chargement initial ────────────────────────────────────────────────────
   useEffect(() => {
@@ -71,6 +74,15 @@ export function useUserDoc(key, initial) {
         deferredReloadRef.current = true;
         return;
       }
+      // A different page/device may announce a change while this document has
+      // a debounce timer pending. Do not replace that local draft with the
+      // older server value; the successful PUT will trigger a deferred reload
+      // once the local value is safely persisted.
+      if (lastSavedRef.current !== null
+        && JSON.stringify(dataRef.current) !== lastSavedRef.current) {
+        deferredReloadRef.current = true;
+        return;
+      }
       if (!getAuthToken()) return;
       try {
         const res = await fetch('/api/data/doc/' + encodeURIComponent(keyRef.current), {
@@ -96,6 +108,7 @@ export function useUserDoc(key, initial) {
     savingRef.current = true;
     setSaving(true);
     setError(null);
+    let persisted = false;
     try {
       const res = await fetch('/api/data/doc/' + encodeURIComponent(keyName), {
         method: 'PUT',
@@ -109,6 +122,7 @@ export function useUserDoc(key, initial) {
         throw new Error(err.error || 'HTTP ' + res.status);
       }
       lastSavedRef.current = JSON.stringify(value);
+      persisted = true;
     } catch (e) {
       setError(e.message);
     } finally {
@@ -116,7 +130,7 @@ export function useUserDoc(key, initial) {
       setSaving(false);
       if (deferredReloadRef.current) {
         deferredReloadRef.current = false;
-        window.dispatchEvent(new CustomEvent('organization:changed', { detail: { deferred: true } }));
+        if (persisted) window.dispatchEvent(new CustomEvent('organization:changed', { detail: { deferred: true } }));
       }
     }
   }, []);
