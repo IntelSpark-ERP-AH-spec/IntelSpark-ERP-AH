@@ -4,6 +4,9 @@ import { subscribeOrganization } from './supabaseRealtime';
 
 const AuthContext = createContext(null);
 const DATA_CHUNK_BYTES = 3 * 1024 * 1024;
+const LOAD_RETRY_DELAY_MS = 350;
+
+const wait = delay => new Promise(resolve => window.setTimeout(resolve, delay));
 
 function expandLargeEntries(data) {
   const entries = [];
@@ -62,6 +65,8 @@ export function AuthProvider({ children }) {
   const [syncError, setSyncError] = useState(null);
   const activeWritesRef = useRef(0);
   const deferredRealtimeRef = useRef(null);
+  const loadRequestRef = useRef(null);
+  const lastLoadedDataRef = useRef(null);
 
   const emitOrganizationChange = useCallback((payload = {}) => {
     setRealtimeRevision(value => value + 1);
@@ -90,6 +95,8 @@ export function AuthProvider({ children }) {
     }
     let unsubscribe = () => {};
     let cancelled = false;
+    let realtimeTimer = null;
+    let latestRealtimePayload = null;
     api.request('/data/context').then(context => {
       if (cancelled) return;
       setOrganization(context);
@@ -99,12 +106,21 @@ export function AuthProvider({ children }) {
           deferredRealtimeRef.current = payload;
           return;
         }
-        emitOrganizationChange(payload);
+        latestRealtimePayload = payload;
+        if (realtimeTimer) window.clearTimeout(realtimeTimer);
+        realtimeTimer = window.setTimeout(() => {
+          realtimeTimer = null;
+          emitOrganizationChange(latestRealtimePayload || {});
+        }, 250);
       }, setRealtimeStatus);
     }).catch(error => {
       if (!cancelled) setSyncError(error.message || 'Synchronisation indisponible');
     });
-    return () => { cancelled = true; unsubscribe(); };
+    return () => {
+      cancelled = true;
+      if (realtimeTimer) window.clearTimeout(realtimeTimer);
+      unsubscribe();
+    };
   }, [user?.id, user?.organization_id, emitOrganizationChange]);
 
   const login = useCallback(async (username, password) => {
@@ -172,19 +188,36 @@ export function AuthProvider({ children }) {
     }
   }, [emitOrganizationChange]);
 
-  const loadData = useCallback(async () => {
-    try {
-      const res = await fetch('/api/data/load', {
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` },
-        credentials: 'same-origin',
-      });
-      if (res.ok) {
-        setSyncError(null);
-        return await restoreLargeEntries(await res.json());
+  const loadData = useCallback((options = {}) => {
+    const background = options?.background === true;
+    if (loadRequestRef.current) return loadRequestRef.current;
+
+    const request = (async () => {
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const data = await restoreLargeEntries(await api.request('/data/load'));
+          lastLoadedDataRef.current = data;
+          setSyncError(null);
+          return data;
+        } catch (error) {
+          lastError = error;
+          const retryable = !error?.status || error.status === 408 || error.status === 429 || error.status >= 500;
+          if (!retryable || attempt === 1) break;
+          await wait(LOAD_RETRY_DELAY_MS);
+        }
       }
-      throw new Error('Chargement partagé impossible');
-    } catch (error) { setSyncError(error.message || 'Chargement partagé impossible'); }
-    return null;
+
+      // Realtime and focus refreshes are opportunistic. Keep the last valid
+      // snapshot without flashing an error for a short network interruption.
+      if (!background) setSyncError(lastError?.message || 'Synchronisation temporairement indisponible');
+      return lastLoadedDataRef.current;
+    })();
+
+    loadRequestRef.current = request.finally(() => {
+      loadRequestRef.current = null;
+    });
+    return loadRequestRef.current;
   }, []);
 
   return (

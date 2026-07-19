@@ -3632,7 +3632,7 @@ export default function App() {
 
   useEffect(() => {
     if (!serverSyncReady || !realtimeRevision || catalogDirtyRef.current) return;
-    loadData().then(applyServerData);
+    loadData({ background: true }).then(applyServerData);
   }, [realtimeRevision, serverSyncReady, loadData, applyServerData]);
 
   const syncToServer = useCallback(() => {
@@ -3714,7 +3714,9 @@ export default function App() {
 
   useEffect(() => {
     if (!serverSyncReady || !user) return undefined;
-    const refresh = () => { if (!document.hidden && !catalogDirtyRef.current) loadData().then(applyServerData); };
+    const refresh = () => {
+      if (!document.hidden && !catalogDirtyRef.current) loadData({ background: true }).then(applyServerData);
+    };
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, [serverSyncReady, user?.id, loadData, applyServerData]);
