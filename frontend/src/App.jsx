@@ -3893,6 +3893,21 @@ export default function App() {
       .app-root table.compact-history-table td {
         padding: 5px 7px !important;
       }
+      .app-root .print-company-details input {
+        font-size: 16px !important;
+        line-height: 1.15 !important;
+      }
+      .app-root .print-company-details input:first-child {
+        font-size: 30px !important;
+        line-height: 1.05 !important;
+        font-weight: 900 !important;
+      }
+      .app-root .print-activity-box strong {
+        font-size: 18px !important;
+        line-height: 1.45 !important;
+        font-weight: 900 !important;
+        font-style: italic !important;
+      }
     }
     .print-payment-methods input[type="radio"] {
       appearance: none !important;
