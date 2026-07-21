@@ -409,6 +409,26 @@
 
 /* Séparateurs verticaux lisibles entre toutes les colonnes, aperçu inclus. */
 @media screen {
+  .app-root .print-card .client-document-header .print-logo-column {
+    min-width: 320px !important;
+    width: 320px !important;
+  }
+  .app-root .print-card .client-document-header .print-logo-column img {
+    max-width: 320px !important;
+    max-height: 195px !important;
+  }
+  .app-root .print-card .client-document-header .print-company-details input:first-child {
+    font-size: 36px !important;
+    line-height: 1.05 !important;
+    font-weight: 900 !important;
+  }
+  .app-root .print-card .client-document-header .print-activity-box strong {
+    width: 100% !important;
+    font-size: 22px !important;
+    line-height: 1.25 !important;
+    font-weight: 900 !important;
+    font-style: italic !important;
+  }
   .app-root table :is(th, td):not(:last-child) {
     border-right: 1px solid #cbd5e1 !important;
   }
