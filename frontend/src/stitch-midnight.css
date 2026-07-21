@@ -429,8 +429,8 @@
   }
   #root .app-root .print-card .client-document-header .print-activity-box strong {
     width: 100% !important;
-    font-size: 28px !important;
-    line-height: 1.18 !important;
+    font-size: 32px !important;
+    line-height: 1.12 !important;
     font-weight: 900 !important;
     font-style: italic !important;
   }
@@ -440,8 +440,17 @@
     align-items: stretch !important;
   }
   #root .app-root .print-card.client-document-card .print-client-meta-row > :is(.print-date-box, .print-client-meta-box) {
-    min-height: 58px !important;
+    min-height: 84px !important;
     height: 100% !important;
+  }
+  #root .app-root .print-card.client-document-card .print-client-meta-box {
+    padding: 10px 14px !important;
+  }
+  #root .app-root .print-card.client-document-card .print-client-meta-box textarea {
+    min-height: 58px !important;
+    height: 58px !important;
+    font-size: 16px !important;
+    line-height: 1.4 !important;
   }
   #root .app-root .print-card.client-document-card .print-legal-box {
     border: 0 !important;
