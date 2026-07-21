@@ -87,7 +87,7 @@ article.sheet.client-document .head { grid-template-columns: 33% 37% 30%; }
 .title { display: grid; place-items: center; font-size: 9pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .client-document .title { place-items: center start; text-align: left; }
 .meta { display: grid; grid-template-columns: 1fr 1fr; border: .25mm solid #aab1ba; }
-.client-document .meta { grid-template-columns: 17% 83%; }
+.client-document .meta { grid-template-columns: calc(17% - .17mm) minmax(0, 1fr); }
 .meta-cell { padding: 2mm 2.5mm; border-right: .25mm solid #aab1ba; overflow: hidden; }
 .meta-cell:last-child { border-right: 0; }
 .meta-cell strong { display: block; margin-bottom: 1.5mm; font-size: 7.5pt; text-transform: uppercase; }

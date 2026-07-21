@@ -435,7 +435,7 @@
     font-style: italic !important;
   }
   #root .app-root .print-card.client-document-card .print-client-meta-row {
-    grid-template-columns: 17% 83% !important;
+    grid-template-columns: calc(17% - 1.32px) minmax(0, 1fr) !important;
   }
   #root .app-root .print-card.client-document-card .print-legal-box,
   #root .app-root .print-card.client-document-card .print-brands-box {
