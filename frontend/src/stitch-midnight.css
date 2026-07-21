@@ -421,13 +421,27 @@
     font-size: 36px !important;
     line-height: 1.05 !important;
     font-weight: 900 !important;
+    color: #000 !important;
+    -webkit-text-fill-color: #000 !important;
+  }
+  #root .app-root .print-card .client-document-header .print-company-details input:not(:first-child) {
+    font-size: 18px !important;
   }
   #root .app-root .print-card .client-document-header .print-activity-box strong {
     width: 100% !important;
-    font-size: 22px !important;
-    line-height: 1.25 !important;
+    font-size: 28px !important;
+    line-height: 1.18 !important;
     font-weight: 900 !important;
     font-style: italic !important;
+  }
+  #root .app-root .print-card.client-document-card .print-client-meta-row {
+    grid-template-columns: 17% 83% !important;
+  }
+  #root .app-root .print-card.client-document-card .print-legal-box,
+  #root .app-root .print-card.client-document-card .print-brands-box {
+    border: 0 !important;
+    border-top: 4px solid #000 !important;
+    border-radius: 0 !important;
   }
   .app-root table :is(th, td):not(:last-child) {
     border-right: 1px solid #cbd5e1 !important;

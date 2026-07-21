@@ -80,13 +80,14 @@ article.sheet .head > .client { display: grid; align-content: start; justify-ite
 .client-document .head,
 article.sheet.client-document .head { grid-template-columns: 33% 37% 30%; }
 .client-document .company-logo { width: 65mm; height: 35mm; }
-.client-document .company strong { font-size: 15pt; }
-.client-document .activity-line { width: 100%; font-size: 11pt !important; line-height: 1.25 !important; word-break: break-word; }
+.client-document .company strong { color: #000; font-size: 15pt; }
+.client-document .company span { font-size: 10pt; }
+.client-document .activity-line { width: 100%; font-size: 13pt !important; line-height: 1.2 !important; word-break: break-word; }
 
 .title { display: grid; place-items: center; font-size: 9pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .client-document .title { place-items: center start; text-align: left; }
 .meta { display: grid; grid-template-columns: 1fr 1fr; border: .25mm solid #aab1ba; }
-.client-document .meta { grid-template-columns: 30mm minmax(0, 1fr); }
+.client-document .meta { grid-template-columns: 17% 83%; }
 .meta-cell { padding: 2mm 2.5mm; border-right: .25mm solid #aab1ba; overflow: hidden; }
 .meta-cell:last-child { border-right: 0; }
 .meta-cell strong { display: block; margin-bottom: 1.5mm; font-size: 7.5pt; text-transform: uppercase; }

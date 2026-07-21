@@ -117,7 +117,7 @@ const THEMES = {
 };
 const STATUS_DOCUMENT_TYPES = new Set(['DEV', 'BL', 'BC', 'FACT', 'AVOIR']);
 const CLIENT_PRINT_DOCUMENT_TYPES = new Set(['DEV', 'BL', 'FACT', 'AVOIR']);
-const COMPANY_ACTIVITY_LINE = '(Importateur et Distributeur de Piece de Rechange de Poids Lourd)';
+const COMPANY_ACTIVITY_LINE = 'Importateur et Distributeur de Piece de Rechange de Poids Lourd';
 
 function documentAmount(document, kind) {
   const legacyKey = kind === 'ht' ? 'totalHT' : kind === 'tva' ? 'totalTVA' : 'totalTTC';
@@ -3002,8 +3002,8 @@ export default function App() {
       @page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{width:210mm;height:297mm;margin:0;padding:0;overflow:hidden;background:#fff}body{font-family:Arial,Helvetica,sans-serif;color:#20252d;font-size:7.2pt;line-height:1.2}
       .sheet{width:210mm;height:297mm;padding:5mm 8mm 4mm;display:grid;grid-template-rows:38mm 10mm 14mm 155mm 26mm 18mm 22mm;gap:.5mm;overflow:hidden;background:#fff}
       .head{display:grid;grid-template-columns:29% 43% 28%;grid-template-rows:38mm;width:100%;height:38mm;align-items:start;border-bottom:.35mm solid #8f98a3;overflow:hidden}.head>.logo,.head>.company,.head>.client{width:100%;min-width:0;height:100%;min-height:0;max-height:100%;padding:0 2mm 2mm;align-self:start;overflow:hidden}.head>.company{padding-left:.5mm}.logo{display:grid;place-items:start start}.company-logo{display:block;width:52mm;height:32mm;object-fit:contain;object-position:left top}.logo-placeholder{margin-top:0;font-size:9pt;font-weight:700}.client-document .head{grid-template-columns:33% 37% 30%}.client-document .company-logo{width:65mm;height:35mm}
-      .company,.client{display:grid;align-content:start;justify-items:start}.company strong{display:block;margin-bottom:2mm;font-size:12pt;line-height:1.05;text-transform:uppercase}.company span{display:block;margin-bottom:1.2mm;font-size:8.6pt;line-height:1.15}.client strong{display:block;margin-bottom:1.5mm;font-size:8.5pt;line-height:1.05;text-transform:uppercase}.client div,.client span{display:block;margin-bottom:1mm;font-size:7.8pt}.client div{font-weight:700;line-height:1.3}.activity-line{height:100%;display:grid!important;place-items:center;text-align:center;font-size:9.2pt!important;line-height:1.35!important;font-weight:900!important;font-style:italic}.client-document .company strong{font-size:15pt}.client-document .activity-line{width:100%;font-size:11pt!important;line-height:1.25!important;word-break:break-word}
-      .title{display:grid;place-items:center;font-size:9.5pt;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.client-document .title{place-items:center start;text-align:left}.meta{display:grid;grid-template-columns:1fr 1fr;border:.25mm solid #aab1ba}.client-document .meta{grid-template-columns:30mm minmax(0,1fr)}.meta-cell{padding:2mm 2.5mm;border-right:.25mm solid #aab1ba;overflow:hidden}.meta-cell:last-child{border-right:0}.meta-cell strong{display:block;margin-bottom:1.5mm;font-size:7.5pt;text-transform:uppercase}.meta-cell span{font-size:7.2pt}.client-meta{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:start;gap:1mm 3mm}.client-meta strong{margin:0}.client-meta .client-value{font-size:7.6pt;font-weight:700;line-height:1.2}.client-meta .client-ice{font-size:7.2pt;white-space:nowrap}
+      .company,.client{display:grid;align-content:start;justify-items:start}.company strong{display:block;margin-bottom:2mm;font-size:12pt;line-height:1.05;text-transform:uppercase}.company span{display:block;margin-bottom:1.2mm;font-size:8.6pt;line-height:1.15}.client strong{display:block;margin-bottom:1.5mm;font-size:8.5pt;line-height:1.05;text-transform:uppercase}.client div,.client span{display:block;margin-bottom:1mm;font-size:7.8pt}.client div{font-weight:700;line-height:1.3}.activity-line{height:100%;display:grid!important;place-items:center;text-align:center;font-size:9.2pt!important;line-height:1.35!important;font-weight:900!important;font-style:italic}.client-document .company strong{font-size:15pt;color:#000}.client-document .company span{font-size:10pt}.client-document .activity-line{width:100%;font-size:13pt!important;line-height:1.2!important;word-break:break-word}
+      .title{display:grid;place-items:center;font-size:9.5pt;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.client-document .title{place-items:center start;text-align:left}.meta{display:grid;grid-template-columns:1fr 1fr;border:.25mm solid #aab1ba}.client-document .meta{grid-template-columns:17% 83%}.meta-cell{padding:2mm 2.5mm;border-right:.25mm solid #aab1ba;overflow:hidden}.meta-cell:last-child{border-right:0}.meta-cell strong{display:block;margin-bottom:1.5mm;font-size:7.5pt;text-transform:uppercase}.meta-cell span{font-size:7.2pt}.client-meta{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:start;gap:1mm 3mm}.client-meta strong{margin:0}.client-meta .client-value{font-size:7.6pt;font-weight:700;line-height:1.2}.client-meta .client-ice{font-size:7.2pt;white-space:nowrap}
       .items{width:100%;height:155mm;table-layout:fixed;border-collapse:collapse;border:0;font-variant-numeric:tabular-nums}.items col:nth-child(1){width:17%}.items col:nth-child(2){width:33%}.items col:nth-child(3){width:8%}.items col:nth-child(4){width:16%}.items col:nth-child(5){width:11%}.items col:nth-child(6){width:15%}.items th,.items td{border:0;border-bottom:.22mm solid #b3bac3;padding:1mm 1.2mm;text-align:center;vertical-align:middle;overflow:hidden}.items thead tr{height:8mm}.items th{font-size:6.6pt;font-weight:800;white-space:nowrap}.items td{font-size:6.8pt}.items tbody tr:last-child td{border-bottom:0}.items .ref{font-family:Consolas,monospace}.items .amount{font-weight:800}.items .blank td{padding:0}.client-document .items th,.client-document .items td{border:0;border-right:.3mm solid #8f98a3}.client-document .items th:last-child,.client-document .items td:last-child{border-right:0}.client-document .items thead tr{background:#f8fafc}.client-document .items th{font-size:7pt}
       .summary{display:grid;grid-template-columns:38% 24% 38%;gap:.6mm;border:0;overflow:hidden}.box{min-width:0;padding:1.5mm 2mm;border:.25mm solid #aab1ba;border-radius:1mm;overflow:hidden}.box:last-child{border:.25mm solid #aab1ba}.sum-title{display:block;margin-bottom:1mm;text-align:center;font-size:7.4pt;font-weight:900;text-transform:uppercase}.methods{display:flex;justify-content:center;gap:2mm;margin-bottom:.8mm;white-space:nowrap}.choice{display:inline-flex;align-items:center;gap:.6mm;font-size:6.4pt}.radio{width:2.6mm;height:2.6mm;border:.28mm solid #6b7280;border-radius:50%;display:inline-block;position:relative;box-sizing:border-box;flex:0 0 auto;vertical-align:middle;background:#fff}.radio.selected{border-color:#1377b7;background:#fff}.radio-dot{display:block;width:1.7mm;height:1.7mm;border:.85mm solid #1377b7;border-radius:50%;box-sizing:border-box;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}.sum-line{display:flex;justify-content:space-between;gap:2mm;min-height:4mm;align-items:center;font-size:6.8pt;font-variant-numeric:tabular-nums}.sum-line strong{font-weight:800;white-space:nowrap}.tax{display:grid;align-content:center}.net{margin-top:.6mm;padding-top:.8mm;border-top:0;font-size:7.2pt;font-weight:900;text-transform:uppercase}
       .legal{display:grid;align-content:center;justify-items:center;padding:1.5mm 8mm 1mm;border-top:.9mm solid #000;text-align:center;overflow:hidden}.legal strong{display:block;margin-bottom:1mm;font-size:7.2pt}.legal div{font-size:6.7pt;line-height:1.3}.brands{margin:0;padding:1.5mm 2mm 1mm;border:0;border-top:.9mm solid #000;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;align-items:center;gap:1mm 2mm;overflow:hidden;background:#fff}.brand{flex:0 0 calc((100% - 14mm)/8);max-width:calc((100% - 14mm)/8);height:8mm;display:grid;place-items:center;overflow:hidden}.brand img{display:block;width:100%;height:8mm;object-fit:contain}
@@ -3966,8 +3966,9 @@ export default function App() {
       .print-activity-box strong { font-size: 9.2pt !important; line-height: 1.35 !important; font-weight: 900 !important; font-style: italic !important; }
       .client-document-header .print-logo-column { min-width: 62mm !important; width: 62mm !important; }
       .client-document-header img { max-height: 35mm !important; max-width: 63mm !important; }
-      .client-document-header .print-company-details input:first-child { min-height: 7mm !important; height: 7mm !important; font-size: 15pt !important; }
-      .client-document-header .print-activity-box strong { width: 100% !important; font-size: 11pt !important; line-height: 1.25 !important; }
+      .client-document-header .print-company-details input:first-child { min-height: 7mm !important; height: 7mm !important; font-size: 15pt !important; color: #000 !important; -webkit-text-fill-color: #000 !important; }
+      .client-document-header .print-company-details input:not(:first-child) { font-size: 10pt !important; }
+      .client-document-header .print-activity-box strong { width: 100% !important; font-size: 13pt !important; line-height: 1.2 !important; }
       .print-title { min-height: 10mm !important; padding: 0 !important; margin: 0 0 1mm !important; display: flex !important; align-items: center !important; justify-content: center !important; }
       .client-document-title { justify-content: flex-start !important; text-align: left !important; }
       .print-title > span:first-child { font-size: 8.5pt !important; }
@@ -3975,7 +3976,7 @@ export default function App() {
       .print-meta { min-height: 14mm !important; margin-bottom: 1mm !important; border-radius: 0 !important; }
       .print-meta > div { padding: 2mm 2mm !important; min-height: 14mm !important; }
       .print-meta input { min-height: 5mm !important; height: 5mm !important; padding: 0 !important; line-height: 1.1 !important; font-size: 8pt !important; }
-      .print-client-meta-row { grid-template-columns: 30mm minmax(0, 1fr) !important; }
+      .print-client-meta-row { grid-template-columns: 17% 83% !important; }
       .print-date-box { padding: 1.5mm 2mm !important; }
       .print-date-box input { font-size: 7.6pt !important; }
       .print-client-meta-box { padding: 1.2mm 2mm !important; display: grid !important; grid-template-columns: max-content minmax(0, 1fr) max-content !important; align-items: start !important; gap: .8mm 2.5mm !important; }
@@ -4030,6 +4031,12 @@ export default function App() {
       .client-document-table table th:last-child,
       .client-document-table table td:last-child { border-right: 0 !important; }
       .client-document-table table tr { border: 0 !important; }
+      .document-items-table col.document-col-0 { width: 17% !important; }
+      .document-items-table col.document-col-1 { width: 33% !important; }
+      .document-items-table col.document-col-2 { width: 8% !important; }
+      .document-items-table col.document-col-3 { width: 16% !important; }
+      .document-items-table col.document-col-4 { width: 11% !important; }
+      .document-items-table col.document-col-5 { width: 15% !important; }
       .print-totals-box > div:last-child { border-top: 0 !important; }
       .print-hidden { display: none !important; }
       @page { size: A4 portrait; margin: 0 !important; }
@@ -4249,7 +4256,7 @@ export default function App() {
               )}
 
               {/* DOCUMENT IMPRIMABLE */}
-              <div ref={documentRef} className="print-card" style={{
+              <div ref={documentRef} className={`print-card ${usesClientPrintLayout ? 'client-document-card' : ''}`} style={{
                 }}>
                 <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span style={{ marginRight: 'auto', fontSize: 12, fontWeight: 800, color: '#64748b' }}>Paramètres de l’entreprise</span>
@@ -4287,18 +4294,18 @@ export default function App() {
                     </div>
                     <div className="print-company-details" style={{ flex: 1 }}>
                       <input value={companyName} onChange={e => { markCompanyDirty('is_company_name'); setCompanyName(e.target.value); }} placeholder={t.companyPlaceholder}
-                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 36 : 30, fontWeight: 900, color: theme.btn, marginBottom: 7 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 36 : 30, fontWeight: 900, color: usesClientPrintLayout ? '#000' : theme.btn, marginBottom: 7 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyAddress} onChange={e => { markCompanyDirty('is_company_address'); setCompanyAddress(e.target.value); }} placeholder={t.addressPlaceholder}
-                        style={{ ...S.input, fontSize: 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 18 : 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyPhone} onChange={e => { markCompanyDirty('is_company_phone'); setCompanyPhone(e.target.value); }} placeholder={t.phonePlaceholder}
-                        style={{ ...S.input, fontSize: 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 18 : 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyEmail} onChange={e => { markCompanyDirty('is_company_email'); setCompanyEmail(e.target.value); }} placeholder="Email..."
-                        style={{ ...S.input, fontSize: 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 18 : 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
                     </div>
                   </div>
                   {usesClientPrintLayout ? (
                     <div className="print-client-box print-activity-box" style={{ width: 390, minHeight: 120, display: 'grid', placeItems: 'center', padding: '10px 14px', textAlign: 'center' }}>
-                      <strong style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 900, fontStyle: 'italic', color: '#111827', width: '100%', wordBreak: 'break-word' }}>{COMPANY_ACTIVITY_LINE}</strong>
+                      <strong style={{ fontSize: 28, lineHeight: 1.18, fontWeight: 900, fontStyle: 'italic', color: '#111827', width: '100%', wordBreak: 'break-word' }}>{COMPANY_ACTIVITY_LINE}</strong>
                     </div>
                   ) : (
                     <div className="print-client-box" style={{ border: '2px solid #cbd5e1', borderRadius: 6, padding: '14px 12px 10px', width: 390, minHeight: 120, background: '#f8fafc', position: 'relative' }}>
@@ -4346,7 +4353,7 @@ export default function App() {
 
                 {/* MÉTADONNÉES */}
                 {usesClientPrintLayout ? (
-                  <div className="print-meta print-client-meta-row" style={{ display: 'grid', gridTemplateColumns: '150px minmax(0, 1fr)', border: '2px solid #94a3b8', borderRadius: 5, overflow: 'hidden', marginBottom: 5 }}>
+                  <div className="print-meta print-client-meta-row" style={{ display: 'grid', gridTemplateColumns: '17% 83%', border: '2px solid #94a3b8', borderRadius: 5, overflow: 'hidden', marginBottom: 5 }}>
                     <div className="print-date-box" style={{ padding: '7px 10px', borderRight: '2px solid #94a3b8', background: '#fff' }}>
                       <span style={{ ...S.label, fontSize: 11, marginBottom: 2 }}>{t.dateDoc}</span>
                       <input type="date" value={documentDate} onChange={e => { if (!isLocked) setDocumentDate(e.target.value); }}
@@ -4385,8 +4392,8 @@ export default function App() {
                   <table className="document-items-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
                       {!isLocked && <col key="col-del" className="no-print" style={{ width: '4%' }} />}
-                      {(isLocked ? [12, 28, 7, 14, 10, 14] : [12, 26, 7, 13, 9, 13]).map((width, index) => (
-                        <col key={`col-head-${index}`} style={{ width: `${width}%` }} />
+                      {(isLocked ? [17, 33, 8, 16, 11, 15] : [13, 33, 8, 16, 11, 15]).map((width, index) => (
+                        <col key={`col-head-${index}`} className={`document-col document-col-${index}`} style={{ width: `${width}%` }} />
                       ))}
                     </colgroup>
                     <thead>
