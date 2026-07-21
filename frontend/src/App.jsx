@@ -4409,8 +4409,8 @@ export default function App() {
                     <table className="document-items-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                       <colgroup>
                         {!isLocked && <col key="col-del2" className="no-print" style={{ width: '4%' }} />}
-                        {(isLocked ? [12, 28, 7, 14, 10, 14] : [12, 26, 7, 13, 9, 13]).map((width, index) => (
-                          <col key={`col-body-${index}`} style={{ width: `${width}%` }} />
+                        {(isLocked ? [17, 33, 8, 16, 11, 15] : [13, 33, 8, 16, 11, 15]).map((width, index) => (
+                          <col key={`col-body-${index}`} className={`document-col document-col-${index}`} style={{ width: `${width}%` }} />
                         ))}
                       </colgroup>
                       <tbody>
@@ -4555,7 +4555,7 @@ export default function App() {
                 </div>
 
                 {/* MARQUES */}
-                <div className="no-print" style={{ display: 'flex', justifyContent: 'center', marginTop: 3, marginBottom: 2 }}>
+                <div className="no-print print-brands-toolbar" style={{ display: 'flex', justifyContent: 'center', marginTop: 3, marginBottom: 2 }}>
                   <button onClick={() => setEditMode(!editMode)} style={{ background: editMode ? '#f59e0b' : '#64748b', color: '#fff', border: 'none', borderRadius: 4, padding: '2px 10px', fontWeight: 700, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>✎ {editMode ? 'Édition ON' : 'Édition'}</button>
                 </div>
                 <div className="print-brands-box" style={{ border: 'none', borderTop: '4px solid #000', borderRadius: 0, padding: '8px 8px 5px', background: '#fff', marginTop: 3 }}>

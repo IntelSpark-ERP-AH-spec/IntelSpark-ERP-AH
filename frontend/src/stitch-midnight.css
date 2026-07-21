@@ -435,12 +435,26 @@
     font-style: italic !important;
   }
   #root .app-root .print-card.client-document-card .print-client-meta-row {
+    display: grid !important;
     grid-template-columns: calc(17% - 1.32px) minmax(0, 1fr) !important;
+    align-items: stretch !important;
   }
-  #root .app-root .print-card.client-document-card .print-legal-box,
-  #root .app-root .print-card.client-document-card .print-brands-box {
+  #root .app-root .print-card.client-document-card .print-client-meta-row > :is(.print-date-box, .print-client-meta-box) {
+    min-height: 58px !important;
+    height: 100% !important;
+  }
+  #root .app-root .print-card.client-document-card .print-legal-box {
     border: 0 !important;
     border-top: 4px solid #000 !important;
+    border-radius: 0 !important;
+  }
+  #root .app-root .print-card.client-document-card .print-brands-toolbar {
+    margin-top: 3px !important;
+    padding-top: 5px !important;
+    border-top: 4px solid #000 !important;
+  }
+  #root .app-root .print-card.client-document-card .print-brands-box {
+    border: 0 !important;
     border-radius: 0 !important;
   }
   .app-root table :is(th, td):not(:last-child) {
