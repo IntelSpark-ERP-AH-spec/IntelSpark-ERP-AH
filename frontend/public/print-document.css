@@ -24,7 +24,7 @@ body {
   height: 297mm;
   padding: 5mm 8mm 4mm;
   display: grid;
-  grid-template-rows: 38mm 10mm 17mm 152mm 26mm 18mm 22mm;
+  grid-template-rows: 38mm 10mm 14mm 155mm 26mm 18mm 22mm;
   gap: .5mm;
   overflow: hidden;
   background: #fff;
@@ -82,7 +82,7 @@ article.sheet.client-document .head { grid-template-columns: 33% 37% 30%; }
 .client-document .company-logo { width: 65mm; height: 35mm; }
 .client-document .company strong { color: #000; font-size: 15pt; }
 .client-document .company span { font-size: 10pt; }
-.client-document .activity-line { width: 100%; font-size: 15pt !important; line-height: 1.15 !important; word-break: break-word; }
+.client-document .activity-line { width: 100%; font-size: 13pt !important; line-height: 1.2 !important; word-break: break-word; }
 
 .title { display: grid; place-items: center; font-size: 9pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .client-document .title { place-items: center start; text-align: left; }
@@ -94,10 +94,10 @@ article.sheet.client-document .head { grid-template-columns: 33% 37% 30%; }
 .meta-cell span { font-size: 7.2pt; }
 .client-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; align-items: start; gap: 1mm 3mm; }
 .client-meta strong { margin: 0; }
-.client-meta .client-value { font-size: 8.5pt; font-weight: 700; line-height: 1.2; }
+.client-meta .client-value { font-size: 7.6pt; font-weight: 700; line-height: 1.2; }
 .client-meta .client-ice { font-size: 7.2pt; white-space: nowrap; }
 
-.items { width: 100%; height: 152mm; table-layout: fixed; border-collapse: collapse; border: 0; font-variant-numeric: tabular-nums; }
+.items { width: 100%; height: 155mm; table-layout: fixed; border-collapse: collapse; border: 0; font-variant-numeric: tabular-nums; }
 .items col:nth-child(1) { width: 17%; }
 .items col:nth-child(2) { width: 33%; }
 .items col:nth-child(3) { width: 8%; }
