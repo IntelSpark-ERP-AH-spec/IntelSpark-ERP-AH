@@ -469,6 +469,14 @@
     border-radius: 0 !important;
     box-shadow: none !important;
   }
+  #root .app-root .print-card .client-document-table .print-body-wrap {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
   .app-root .print-card .client-document-table table :is(th, td):not(:last-child) {
     border-right: 1.5px solid #94a3b8 !important;
   }
