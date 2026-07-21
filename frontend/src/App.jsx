@@ -117,7 +117,7 @@ const THEMES = {
 };
 const STATUS_DOCUMENT_TYPES = new Set(['DEV', 'BL', 'BC', 'FACT', 'AVOIR']);
 const CLIENT_PRINT_DOCUMENT_TYPES = new Set(['DEV', 'BL', 'FACT', 'AVOIR']);
-const COMPANY_ACTIVITY_LINE = '(Importateur et Distributeur de Piece de Camions et Remorque)';
+const COMPANY_ACTIVITY_LINE = '(Importateur et Distributeur de Piece de Rechange de Poids Lourd)';
 
 function documentAmount(document, kind) {
   const legacyKey = kind === 'ht' ? 'totalHT' : kind === 'tva' ? 'totalTVA' : 'totalTTC';
@@ -2987,7 +2987,7 @@ export default function App() {
       const number = Number(value || 0);
       return Number.isInteger(number) ? number.toFixed(0) : number.toFixed(2);
     };
-    const clientTitle = documentType === 'BC' ? t.fournisseur : 'Coordonnées du client';
+    const clientTitle = documentType === 'BC' ? t.fournisseur : 'Client';
     const usesClientPrintLayout = CLIENT_PRINT_DOCUMENT_TYPES.has(documentType);
     const paymentChoices = [t.paymentCheque, t.paymentCash, t.paymentTransfer, t.paymentEffet]
       .map(method => {
@@ -2998,21 +2998,21 @@ export default function App() {
     const brandHtml = brands.map(brand => `<div class="brand"><img src="${safeImage(brand.logo)}" alt=""></div>`).join('');
     const logoHtml = companyLogo ? `<img class="company-logo" src="${safeImage(companyLogo)}" alt="Logo">` : '';
 
-    return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><link rel="stylesheet" href="/print-document.css?v=20260720-1"><style${cspNonce ? ` nonce="${esc(cspNonce)}"` : ''}>
+    return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><link rel="stylesheet" href="/print-document.css?v=20260721-1"><style${cspNonce ? ` nonce="${esc(cspNonce)}"` : ''}>
       @page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{width:210mm;height:297mm;margin:0;padding:0;overflow:hidden;background:#fff}body{font-family:Arial,Helvetica,sans-serif;color:#20252d;font-size:7.2pt;line-height:1.2}
       .sheet{width:210mm;height:297mm;padding:5mm 8mm 4mm;display:grid;grid-template-rows:38mm 10mm 14mm 155mm 26mm 18mm 22mm;gap:.5mm;overflow:hidden;background:#fff}
-      .head{display:grid;grid-template-columns:29% 43% 28%;grid-template-rows:38mm;width:100%;height:38mm;align-items:start;border-bottom:.35mm solid #8f98a3;overflow:hidden}.head>.logo,.head>.company,.head>.client{width:100%;min-width:0;height:100%;min-height:0;max-height:100%;padding:0 2mm 2mm;align-self:start;overflow:hidden}.head>.company{padding-left:.5mm}.logo{display:grid;place-items:start start}.company-logo{display:block;width:52mm;height:32mm;object-fit:contain;object-position:left top}.logo-placeholder{margin-top:0;font-size:9pt;font-weight:700}
-      .company,.client{display:grid;align-content:start;justify-items:start}.company strong{display:block;margin-bottom:2mm;font-size:12pt;line-height:1.05;text-transform:uppercase}.company span{display:block;margin-bottom:1.2mm;font-size:8.6pt;line-height:1.15}.client strong{display:block;margin-bottom:1.5mm;font-size:8.5pt;line-height:1.05;text-transform:uppercase}.client div,.client span{display:block;margin-bottom:1mm;font-size:7.8pt}.client div{font-weight:700;line-height:1.3}.activity-line{height:100%;display:grid!important;place-items:center;text-align:center;font-size:9.2pt!important;line-height:1.35!important;font-weight:900!important;font-style:italic}
-      .title{display:grid;place-items:center;font-size:9pt;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.client-document .title{place-items:center start;text-align:left}.meta{display:grid;grid-template-columns:1fr 1fr;border:.25mm solid #aab1ba}.client-document .meta{grid-template-columns:30mm minmax(0,1fr)}.meta-cell{padding:2mm 2.5mm;border-right:.25mm solid #aab1ba;overflow:hidden}.meta-cell:last-child{border-right:0}.meta-cell strong{display:block;margin-bottom:1.5mm;font-size:7.5pt;text-transform:uppercase}.meta-cell span{font-size:7.2pt}.client-meta{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:start;gap:1mm 3mm}.client-meta strong{margin:0}.client-meta .client-value{font-size:7.6pt;font-weight:700;line-height:1.2}.client-meta .client-ice{font-size:7.2pt;white-space:nowrap}
-      .items{width:100%;height:155mm;table-layout:fixed;border-collapse:collapse;border:0;font-variant-numeric:tabular-nums}.items col:nth-child(1){width:17%}.items col:nth-child(2){width:33%}.items col:nth-child(3){width:8%}.items col:nth-child(4){width:16%}.items col:nth-child(5){width:11%}.items col:nth-child(6){width:15%}.items th,.items td{border:0;border-bottom:.22mm solid #b3bac3;padding:1mm 1.2mm;text-align:center;vertical-align:middle;overflow:hidden}.items thead tr{height:8mm}.items th{font-size:6.6pt;font-weight:800;white-space:nowrap}.items td{font-size:6.8pt}.items tbody tr:last-child td{border-bottom:0}.items .ref{font-family:Consolas,monospace}.items .amount{font-weight:800}.items .blank td{padding:0}
+      .head{display:grid;grid-template-columns:29% 43% 28%;grid-template-rows:38mm;width:100%;height:38mm;align-items:start;border-bottom:.35mm solid #8f98a3;overflow:hidden}.head>.logo,.head>.company,.head>.client{width:100%;min-width:0;height:100%;min-height:0;max-height:100%;padding:0 2mm 2mm;align-self:start;overflow:hidden}.head>.company{padding-left:.5mm}.logo{display:grid;place-items:start start}.company-logo{display:block;width:52mm;height:32mm;object-fit:contain;object-position:left top}.logo-placeholder{margin-top:0;font-size:9pt;font-weight:700}.client-document .head{grid-template-columns:33% 37% 30%}.client-document .company-logo{width:65mm;height:35mm}
+      .company,.client{display:grid;align-content:start;justify-items:start}.company strong{display:block;margin-bottom:2mm;font-size:12pt;line-height:1.05;text-transform:uppercase}.company span{display:block;margin-bottom:1.2mm;font-size:8.6pt;line-height:1.15}.client strong{display:block;margin-bottom:1.5mm;font-size:8.5pt;line-height:1.05;text-transform:uppercase}.client div,.client span{display:block;margin-bottom:1mm;font-size:7.8pt}.client div{font-weight:700;line-height:1.3}.activity-line{height:100%;display:grid!important;place-items:center;text-align:center;font-size:9.2pt!important;line-height:1.35!important;font-weight:900!important;font-style:italic}.client-document .company strong{font-size:15pt}.client-document .activity-line{width:100%;font-size:11pt!important;line-height:1.25!important;word-break:break-word}
+      .title{display:grid;place-items:center;font-size:9.5pt;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.client-document .title{place-items:center start;text-align:left}.meta{display:grid;grid-template-columns:1fr 1fr;border:.25mm solid #aab1ba}.client-document .meta{grid-template-columns:30mm minmax(0,1fr)}.meta-cell{padding:2mm 2.5mm;border-right:.25mm solid #aab1ba;overflow:hidden}.meta-cell:last-child{border-right:0}.meta-cell strong{display:block;margin-bottom:1.5mm;font-size:7.5pt;text-transform:uppercase}.meta-cell span{font-size:7.2pt}.client-meta{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:start;gap:1mm 3mm}.client-meta strong{margin:0}.client-meta .client-value{font-size:7.6pt;font-weight:700;line-height:1.2}.client-meta .client-ice{font-size:7.2pt;white-space:nowrap}
+      .items{width:100%;height:155mm;table-layout:fixed;border-collapse:collapse;border:0;font-variant-numeric:tabular-nums}.items col:nth-child(1){width:17%}.items col:nth-child(2){width:33%}.items col:nth-child(3){width:8%}.items col:nth-child(4){width:16%}.items col:nth-child(5){width:11%}.items col:nth-child(6){width:15%}.items th,.items td{border:0;border-bottom:.22mm solid #b3bac3;padding:1mm 1.2mm;text-align:center;vertical-align:middle;overflow:hidden}.items thead tr{height:8mm}.items th{font-size:6.6pt;font-weight:800;white-space:nowrap}.items td{font-size:6.8pt}.items tbody tr:last-child td{border-bottom:0}.items .ref{font-family:Consolas,monospace}.items .amount{font-weight:800}.items .blank td{padding:0}.client-document .items th,.client-document .items td{border:0;border-right:.3mm solid #8f98a3}.client-document .items th:last-child,.client-document .items td:last-child{border-right:0}.client-document .items thead tr{background:#f8fafc}.client-document .items th{font-size:7pt}
       .summary{display:grid;grid-template-columns:38% 24% 38%;gap:.6mm;border:0;overflow:hidden}.box{min-width:0;padding:1.5mm 2mm;border:.25mm solid #aab1ba;border-radius:1mm;overflow:hidden}.box:last-child{border:.25mm solid #aab1ba}.sum-title{display:block;margin-bottom:1mm;text-align:center;font-size:7.4pt;font-weight:900;text-transform:uppercase}.methods{display:flex;justify-content:center;gap:2mm;margin-bottom:.8mm;white-space:nowrap}.choice{display:inline-flex;align-items:center;gap:.6mm;font-size:6.4pt}.radio{width:2.6mm;height:2.6mm;border:.28mm solid #6b7280;border-radius:50%;display:inline-block;position:relative;box-sizing:border-box;flex:0 0 auto;vertical-align:middle;background:#fff}.radio.selected{border-color:#1377b7;background:#fff}.radio-dot{display:block;width:1.7mm;height:1.7mm;border:.85mm solid #1377b7;border-radius:50%;box-sizing:border-box;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}.sum-line{display:flex;justify-content:space-between;gap:2mm;min-height:4mm;align-items:center;font-size:6.8pt;font-variant-numeric:tabular-nums}.sum-line strong{font-weight:800;white-space:nowrap}.tax{display:grid;align-content:center}.net{margin-top:.6mm;padding-top:.8mm;border-top:0;font-size:7.2pt;font-weight:900;text-transform:uppercase}
-      .legal{display:grid;align-content:center;justify-items:center;padding:1.5mm 8mm 1mm;border-top:.9mm solid #000;text-align:center;overflow:hidden}.legal strong{display:block;margin-bottom:1mm;font-size:7.2pt}.legal div{font-size:6.7pt;line-height:1.3}.brands{margin:0;padding:1.5mm 2mm 1mm;border:0;border-top:.9mm solid #000;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;align-items:center;gap:1mm 2mm;overflow:hidden;background:#fff}.brand{flex:0 0 calc((100% - 14mm)/8);max-width:calc((100% - 14mm)/8);height:8mm;display:grid;place-items:center;overflow:hidden}.brand img{display:block;width:100%;height:8mm;object-fit:contain}.word{font-size:8pt;font-weight:900;letter-spacing:-.04em;color:#364152}.w1{font-style:italic}.w2{letter-spacing:.04em}.w3{border:.25mm solid #64748b;border-radius:50%;font-size:6.6pt}
+      .legal{display:grid;align-content:center;justify-items:center;padding:1.5mm 8mm 1mm;border-top:.9mm solid #000;text-align:center;overflow:hidden}.legal strong{display:block;margin-bottom:1mm;font-size:7.2pt}.legal div{font-size:6.7pt;line-height:1.3}.brands{margin:0;padding:1.5mm 2mm 1mm;border:0;border-top:.9mm solid #000;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;align-items:center;gap:1mm 2mm;overflow:hidden;background:#fff}.brand{flex:0 0 calc((100% - 14mm)/8);max-width:calc((100% - 14mm)/8);height:8mm;display:grid;place-items:center;overflow:hidden}.brand img{display:block;width:100%;height:8mm;object-fit:contain}
     </style></head><body><article class="sheet ${usesClientPrintLayout ? 'client-document' : ''}">
-      <header class="head"><div class="logo">${logoHtml}</div><div class="company"><strong>${esc(companyName || 'Entreprise')}</strong><span>${esc(companyAddress)}</span><span>${esc(companyPhone)}</span><span>${esc(companyEmail)}</span></div><div class="client">${usesClientPrintLayout ? `<div class="activity-line">${esc(COMPANY_ACTIVITY_LINE)}</div>` : `<strong>${esc(clientTitle)}</strong><div>${lines(clientDetails || 'Coordonnées client non renseignées')}</div>${clientICE ? `<span>ICE : ${esc(clientICE)}</span>` : ''}`}</div></header>
+      <header class="head"><div class="logo">${logoHtml}</div><div class="company"><strong>${esc(companyName || 'Entreprise')}</strong><span>${esc(companyAddress)}</span><span>${esc(companyPhone)}</span><span>${esc(companyEmail)}</span></div><div class="client">${usesClientPrintLayout ? `<div class="activity-line">${esc(COMPANY_ACTIVITY_LINE)}</div>` : `<strong>${esc(clientTitle)}</strong><div>${lines(clientDetails || 'Client non renseigné')}</div>${clientICE ? `<span>ICE : ${esc(clientICE)}</span>` : ''}`}</div></header>
       <section class="title">${esc(docTitle)} N° ${esc(documentNumber)}</section>
-      <section class="meta">${usesClientPrintLayout ? `<div class="meta-cell date-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span>${documentType === 'AVOIR' && parentFactRef ? `<span>${esc(t.factOrig)} : ${esc(parentFactRef)}</span>` : ''}</div><div class="meta-cell client-meta"><strong>${esc(clientTitle)}</strong><span class="client-value">${lines(clientDetails || 'Coordonnées client non renseignées')}</span>${clientICE ? `<span class="client-ice">ICE : ${esc(clientICE)}</span>` : ''}</div>` : `<div class="meta-cell"><strong>${esc(t.representative)}</strong><span>${esc(representative)}</span></div><div class="meta-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span></div>`}</section>
+      <section class="meta">${usesClientPrintLayout ? `<div class="meta-cell date-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span>${documentType === 'AVOIR' && parentFactRef ? `<span>${esc(t.factOrig)} : ${esc(parentFactRef)}</span>` : ''}</div><div class="meta-cell client-meta"><strong>${esc(clientTitle)}</strong><span class="client-value">${lines(clientDetails || 'Client non renseigné')}</span>${clientICE ? `<span class="client-ice">ICE : ${esc(clientICE)}</span>` : ''}</div>` : `<div class="meta-cell"><strong>${esc(t.representative)}</strong><span>${esc(representative)}</span></div><div class="meta-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span></div>`}</section>
       <table class="items"><colgroup><col><col><col><col><col><col></colgroup><thead><tr><th>${esc(t.refLabel)}</th><th>${esc(t.descLabel)}</th><th>${esc(t.qtyLabel)}</th><th>${esc(t.priceLabel)}</th><th>Remise %</th><th>${esc(t.montantHT)}</th></tr></thead><tbody>${filledRows}${blankRows}</tbody></table>
-      <section class="summary"><div class="box payment-box"><strong class="sum-title">${esc(t.paymentMethod)}</strong><div class="methods">${paymentChoices}</div><div class="sum-line"><span>${esc(t.dueDate)} :</span><strong>${esc(paymentDueDate)}</strong></div><div class="sum-line"><span>${esc(t.timbreFiscal)} :</span><strong>${compactNumber(timbreFiscal)} ${esc(currencySymbol)}</strong></div><div class="sum-line"><span>${esc(t.acompte)} :</span><strong>${compactNumber(acompte)} ${esc(currencySymbol)}</strong></div></div><div class="box tax tax-box"><strong class="sum-title">Taxes</strong><div class="sum-line"><span>TVA %</span><strong>${compactNumber(docTvaRate)}</strong></div><div class="sum-line"><span>${esc(t.discountLabel)} %</span><strong>${discountRate.toFixed(2)}</strong></div></div><div class="box amounts-box"><div class="sum-line"><span>${esc(t.totalHT)}</span><strong>${totals.ht.toFixed(2)} ${esc(currencySymbol)}</strong></div><div class="sum-line"><span>TVA ${Number(docTvaRate || 0).toFixed(0)}%</span><strong>${totals.tva.toFixed(2)} ${esc(currencySymbol)}</strong></div><div class="sum-line net"><span>${esc(t.netToPay)}</span><strong>${totals.ttc.toFixed(2)} ${esc(currencySymbol)}</strong></div></div></section>
+      <section class="summary"><div class="box payment-box"><strong class="sum-title">${esc(t.paymentMethod)}</strong><div class="methods">${paymentChoices}</div><div class="sum-line"><span>${esc(t.dueDate)} :</span><strong>${esc(paymentDueDate)}</strong></div><div class="sum-line"><span>${esc(t.timbreFiscal)} :</span><strong>${compactNumber(timbreFiscal)} ${esc(currencySymbol)}</strong></div><div class="sum-line"><span>${esc(t.acompte)} :</span><strong>${compactNumber(acompte)} ${esc(currencySymbol)}</strong></div></div><div class="box tax tax-box">${usesClientPrintLayout ? '' : '<strong class="sum-title">Taxes</strong>'}<div class="sum-line"><span>TVA %</span><strong>${compactNumber(docTvaRate)}</strong></div><div class="sum-line"><span>${esc(t.discountLabel)} %</span><strong>${discountRate.toFixed(2)}</strong></div></div><div class="box amounts-box"><div class="sum-line"><span>${esc(t.totalHT)}</span><strong>${totals.ht.toFixed(2)} ${esc(currencySymbol)}</strong></div><div class="sum-line"><span>TVA ${Number(docTvaRate || 0).toFixed(0)}%</span><strong>${totals.tva.toFixed(2)} ${esc(currencySymbol)}</strong></div><div class="sum-line net"><span>${esc(t.netToPay)}</span><strong>${totals.ttc.toFixed(2)} ${esc(currencySymbol)}</strong></div></div></section>
       <footer class="legal"><strong>${esc(t.footerLabel)}</strong><div>${lines(legal)}</div></footer><section class="brands">${brandHtml}</section>
     </article></body></html>`;
   };
@@ -3864,24 +3864,14 @@ export default function App() {
     .client-document-table table th,
     .client-document-table table td {
       border-left: 0 !important;
-      border-right: 0 !important;
+      border-top: 0 !important;
+      border-bottom: 0 !important;
+      border-right: 1.5px solid #94a3b8 !important;
       box-shadow: none !important;
     }
-    .client-document-table table thead th {
-      border-top: 0 !important;
-      border-bottom: 1.5px solid #94a3b8 !important;
-    }
-    .client-document-table table tbody tr {
-      border-left: 0 !important;
-      border-right: 0 !important;
-      border-bottom: 1px solid #e2e8f0 !important;
-    }
-    .client-document-table table tbody tr:last-child {
-      border-bottom: 0 !important;
-    }
-    .client-document-table table tbody tr:last-child td {
-      border-bottom: 0 !important;
-    }
+    .client-document-table table th:last-child,
+    .client-document-table table td:last-child { border-right: 0 !important; }
+    .client-document-table table tr { border: 0 !important; }
     @media screen {
       .app-root table.compact-history-table {
         width: min(100%, 900px) !important;
@@ -3897,14 +3887,14 @@ export default function App() {
         font-size: 16px !important;
         line-height: 1.15 !important;
       }
-      .app-root .print-company-details input:first-child {
-        font-size: 30px !important;
+      .app-root .client-document-header .print-company-details input:first-child {
+        font-size: 36px !important;
         line-height: 1.05 !important;
         font-weight: 900 !important;
       }
-      .app-root .print-activity-box strong {
-        font-size: 18px !important;
-        line-height: 1.45 !important;
+      .app-root .client-document-header .print-activity-box strong {
+        font-size: 22px !important;
+        line-height: 1.25 !important;
         font-weight: 900 !important;
         font-style: italic !important;
       }
@@ -3974,6 +3964,10 @@ export default function App() {
       .print-client-details { min-height: 20mm !important; max-height: 26mm !important; overflow: hidden !important; white-space: pre-wrap !important; overflow-wrap: anywhere !important; line-height: 1.25 !important; font-size: 9pt !important; font-weight: 700 !important; }
       .print-activity-box { display: grid !important; place-items: center !important; text-align: center !important; }
       .print-activity-box strong { font-size: 9.2pt !important; line-height: 1.35 !important; font-weight: 900 !important; font-style: italic !important; }
+      .client-document-header .print-logo-column { min-width: 62mm !important; width: 62mm !important; }
+      .client-document-header img { max-height: 35mm !important; max-width: 63mm !important; }
+      .client-document-header .print-company-details input:first-child { min-height: 7mm !important; height: 7mm !important; font-size: 15pt !important; }
+      .client-document-header .print-activity-box strong { width: 100% !important; font-size: 11pt !important; line-height: 1.25 !important; }
       .print-title { min-height: 10mm !important; padding: 0 !important; margin: 0 0 1mm !important; display: flex !important; align-items: center !important; justify-content: center !important; }
       .client-document-title { justify-content: flex-start !important; text-align: left !important; }
       .print-title > span:first-child { font-size: 8.5pt !important; }
@@ -4032,11 +4026,10 @@ export default function App() {
       .client-document-table table { border: 0 !important; box-shadow: none !important; }
       .client-document-table table th,
       .client-document-table table td,
-      .client-document-table .print-empty-row td { border-left: 0 !important; border-right: 0 !important; box-shadow: none !important; }
-      .client-document-table table thead th { border-top: 0 !important; border-bottom: 1.5px solid #94a3b8 !important; }
-      .client-document-table table tbody tr { border-left: 0 !important; border-right: 0 !important; border-bottom: 1px solid #e2e8f0 !important; }
-      .client-document-table table tbody tr:last-child,
-      .client-document-table table tbody tr:last-child td { border-bottom: 0 !important; }
+      .client-document-table .print-empty-row td { border-left: 0 !important; border-top: 0 !important; border-bottom: 0 !important; border-right: .3mm solid #94a3b8 !important; box-shadow: none !important; }
+      .client-document-table table th:last-child,
+      .client-document-table table td:last-child { border-right: 0 !important; }
+      .client-document-table table tr { border: 0 !important; }
       .print-totals-box > div:last-child { border-top: 0 !important; }
       .print-hidden { display: none !important; }
       @page { size: A4 portrait; margin: 0 !important; }
@@ -4278,12 +4271,12 @@ export default function App() {
                 boxSizing: 'border-box', flex: '0 0 auto', minHeight: 0,
               }}>
                 {/* EN-TÊTE */}
-                <div className="print-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', paddingBottom: 6, borderBottom: '2px solid #cbd5e1', marginBottom: 6, gap: 12 }}>
+                <div className={`print-header ${usesClientPrintLayout ? 'client-document-header' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', paddingBottom: 6, borderBottom: '2px solid #cbd5e1', marginBottom: 6, gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, flex: 1 }}>
-                    <div className="print-logo-column" style={{ minWidth: 280 }}>
+                    <div className="print-logo-column" style={{ minWidth: usesClientPrintLayout ? 320 : 280 }}>
                       <div onClick={() => companyEditMode && !isLocked && logoInputRef.current.click()} style={{ cursor: companyEditMode && !isLocked ? 'pointer' : 'default' }}>
                         {companyLogo ? (
-                          <img src={companyLogo} alt="Logo" style={{ maxHeight: 175, maxWidth: 280, objectFit: 'contain', borderRadius: 6 }} />
+                          <img src={companyLogo} alt="Logo" style={{ maxHeight: usesClientPrintLayout ? 195 : 175, maxWidth: usesClientPrintLayout ? 320 : 280, objectFit: 'contain', borderRadius: 6 }} />
                         ) : (
                           <div style={{ background: '#f1f5f9', border: '2px dashed #cbd5e1', borderRadius: 6, padding: '20px 18px', fontSize: 'inherit', color: '#94a3b8', fontWeight: 700, textAlign: 'center', minHeight: 65, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{t.addLogo}</div>
                         )}
@@ -4294,7 +4287,7 @@ export default function App() {
                     </div>
                     <div className="print-company-details" style={{ flex: 1 }}>
                       <input value={companyName} onChange={e => { markCompanyDirty('is_company_name'); setCompanyName(e.target.value); }} placeholder={t.companyPlaceholder}
-                        style={{ ...S.input, fontSize: 30, fontWeight: 900, color: theme.btn, marginBottom: 7 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 36 : 30, fontWeight: 900, color: theme.btn, marginBottom: 7 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyAddress} onChange={e => { markCompanyDirty('is_company_address'); setCompanyAddress(e.target.value); }} placeholder={t.addressPlaceholder}
                         style={{ ...S.input, fontSize: 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyPhone} onChange={e => { markCompanyDirty('is_company_phone'); setCompanyPhone(e.target.value); }} placeholder={t.phonePlaceholder}
@@ -4304,8 +4297,8 @@ export default function App() {
                     </div>
                   </div>
                   {usesClientPrintLayout ? (
-                    <div className="print-client-box print-activity-box" style={{ width: 390, minHeight: 120, display: 'grid', placeItems: 'center', padding: '18px 20px', textAlign: 'center' }}>
-                      <strong style={{ fontSize: 18, lineHeight: 1.45, fontWeight: 900, fontStyle: 'italic', color: '#111827' }}>{COMPANY_ACTIVITY_LINE}</strong>
+                    <div className="print-client-box print-activity-box" style={{ width: 390, minHeight: 120, display: 'grid', placeItems: 'center', padding: '10px 14px', textAlign: 'center' }}>
+                      <strong style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 900, fontStyle: 'italic', color: '#111827', width: '100%', wordBreak: 'break-word' }}>{COMPANY_ACTIVITY_LINE}</strong>
                     </div>
                   ) : (
                     <div className="print-client-box" style={{ border: '2px solid #cbd5e1', borderRadius: 6, padding: '14px 12px 10px', width: 390, minHeight: 120, background: '#f8fafc', position: 'relative' }}>
@@ -4316,7 +4309,7 @@ export default function App() {
                       </div>
                       <textarea rows={4} value={clientDetails} onChange={e => { if (!isLocked) setClientDetails(e.target.value); }} placeholder={t.clientPlaceholder}
                         style={{ ...S.input, resize: 'vertical', fontSize: 'inherit', lineHeight: 1.5, minHeight: 70, fontWeight: 600 }} readOnly={isLocked} />
-                      <div className="print-only print-client-details">{clientDetails || 'Coordonnées client non renseignées'}</div>
+                      <div className="print-only print-client-details">{clientDetails || 'Client non renseigné'}</div>
                       {clientICE && <div style={{ fontSize: 'inherit', color: '#64748b', marginTop: 2 }}>{t.iceLabel}: <strong>{clientICE}</strong></div>}
                     </div>
                   )}
@@ -4363,15 +4356,15 @@ export default function App() {
                       )}
                     </div>
                     <div className="print-client-meta-box" style={{ padding: '7px 10px', background: '#fff', minWidth: 0 }}>
-                      <span className="print-only print-client-meta-label">Coordonnées du client</span>
+                      <span className="print-only print-client-meta-label">Client</span>
                       <div className="no-print" style={{ marginBottom: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <span style={{ ...S.label, fontSize: 11, margin: 0, marginRight: 'auto' }}>Coordonnées du client</span>
+                        <span style={{ ...S.label, fontSize: 11, margin: 0, marginRight: 'auto' }}>Client</span>
                         <button onClick={() => setShowClientModal(true)} style={{ ...S.btn(), fontSize: 10, padding: '3px 8px' }}>{t.chooseClient}</button>
                         {clientDetails && <button onClick={() => { if (!isLocked) { setClientDetails(''); setClientICE(''); } }} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>✕</button>}
                       </div>
                       <textarea rows={2} value={clientDetails} onChange={e => { if (!isLocked) setClientDetails(e.target.value); }} placeholder={t.clientPlaceholder}
                         style={{ ...S.input, resize: 'vertical', fontSize: 13, lineHeight: 1.35, minHeight: 42, fontWeight: 700 }} readOnly={isLocked} />
-                      <div className="print-only print-client-details">{clientDetails || 'Coordonnées client non renseignées'}</div>
+                      <div className="print-only print-client-details">{clientDetails || 'Client non renseigné'}</div>
                       {clientICE && <div className="print-client-ice" style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{t.iceLabel}: <strong>{clientICE}</strong></div>}
                     </div>
                   </div>
@@ -4400,7 +4393,7 @@ export default function App() {
                       <tr>
                         {!isLocked && <th key="th-del" style={{ ...S.tableHeader, borderRight: 'none', textAlign: 'center' }} className="no-print" />}
                         {[t.refLabel, t.descLabel, t.qtyLabel, t.priceLabel, 'Remise %', t.montantHT].map((h, i) => (
-                          <th key={i} style={{ ...S.tableHeader, textAlign: 'center', padding: '6px 3px' }}>{h}</th>
+                          <th key={i} style={{ ...S.tableHeader, textAlign: 'center', padding: '6px 3px', borderRight: i < 5 ? '2px solid #94a3b8' : 'none' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -4459,8 +4452,9 @@ export default function App() {
                           <tr key={`e${i}`} className="print-empty-row" style={{ height: 32, background: '#fff' }}>
                             {[...Array(!isLocked ? 7 : 6)].map((__, j) => {
                               const isDel = !isLocked && j === 0;
+                              const isLast = j === (!isLocked ? 6 : 5);
                               return (
-                                <td key={j} className={isDel ? 'no-print' : ''} style={{ padding: 3, textAlign: 'center', color: '#eef0f3' }}>&nbsp;</td>
+                                <td key={j} className={isDel ? 'no-print' : ''} style={{ padding: 3, textAlign: 'center', color: '#eef0f3', borderRight: !isLast ? '2px solid #cbd5e1' : 'none' }}>&nbsp;</td>
                               );
                             })}
                           </tr>
@@ -4502,7 +4496,7 @@ export default function App() {
                     </div>
 
                     <div className="print-tax-box" style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', background: '#f8fafc', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-                      <span style={{ ...S.label, textAlign: 'center', display: 'block', marginBottom: 2, fontWeight: 900 }}>TAXES</span>
+                      {!usesClientPrintLayout && <span style={{ ...S.label, textAlign: 'center', display: 'block', marginBottom: 2, fontWeight: 900 }}>TAXES</span>}
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}><span>TVA %</span><strong>{docTvaRate}</strong></div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
                         <span>{t.discountLabel} %</span>

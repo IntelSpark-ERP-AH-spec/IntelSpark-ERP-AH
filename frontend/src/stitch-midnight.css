@@ -422,7 +422,7 @@
     box-shadow: none !important;
   }
   .app-root .print-card .client-document-table table :is(th, td):not(:last-child) {
-    border-right: 0 !important;
+    border-right: 1.5px solid #94a3b8 !important;
   }
   .app-root .print-card table {
     width: 100% !important;
@@ -464,8 +464,11 @@
     border-bottom: 1px solid #dbe1e8 !important;
     background: #fff !important;
   }
-  .app-root .print-card .client-document-table tbody tr:last-child,
-  .app-root .print-card .client-document-table tbody tr:last-child td {
+  .app-root .print-card .client-document-table tbody tr,
+  .app-root .print-card .client-document-table tbody tr.print-empty-row,
+  .app-root .print-card .client-document-table tbody tr.print-empty-row td,
+  .app-root .print-card .client-document-table :is(th, td) {
+    border-top: 0 !important;
     border-bottom: 0 !important;
   }
   .app-root .print-card .print-summary-grid {

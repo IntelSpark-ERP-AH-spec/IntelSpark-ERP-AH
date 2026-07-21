@@ -77,6 +77,11 @@ article.sheet .head > .client { display: grid; align-content: start; justify-ite
 .client span { display: block; margin-bottom: 1mm; font-size: 7.8pt; }
 .client div { font-weight: 700; line-height: 1.3; }
 .activity-line { height: 100%; display: grid !important; place-items: center; text-align: center; font-size: 9.2pt !important; line-height: 1.35 !important; font-weight: 900 !important; font-style: italic; }
+.client-document .head,
+article.sheet.client-document .head { grid-template-columns: 33% 37% 30%; }
+.client-document .company-logo { width: 65mm; height: 35mm; }
+.client-document .company strong { font-size: 15pt; }
+.client-document .activity-line { width: 100%; font-size: 11pt !important; line-height: 1.25 !important; word-break: break-word; }
 
 .title { display: grid; place-items: center; font-size: 9pt; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .client-document .title { place-items: center start; text-align: left; }
@@ -100,18 +105,25 @@ article.sheet .head > .client { display: grid; align-content: start; justify-ite
 .items col:nth-child(6) { width: 15%; }
 .items th,
 .items td { border: 0; border-bottom: .22mm solid #b3bac3; padding: 1mm 1.2mm; text-align: center; vertical-align: middle; overflow: hidden; }
+.items tbody tr:last-child td { border-bottom: 0; }
 .items thead tr { height: 8mm; }
 .items th { font-size: 6.6pt; font-weight: 800; white-space: nowrap; }
 .items td { font-size: 6.8pt; }
 .items .ref { font-family: Consolas, monospace; }
 .items .amount { font-weight: 800; }
 .items .blank td { padding: 0; }
-.items tbody tr:last-child td { border-bottom: 0; }
+.client-document .items th,
+.client-document .items td { border: 0; border-right: .3mm solid #8f98a3; }
+.client-document .items th:last-child,
+.client-document .items td:last-child { border-right: 0; }
+.client-document .items thead tr { background: #f8fafc; }
+.client-document .items th { font-size: 7pt; }
 
 .summary { display: grid; grid-template-columns: 40% 24% 36%; gap: .6mm; border: 0; overflow: hidden; }
 .box { min-width: 0; padding: 1.7mm 3mm 1mm; border: .25mm solid #c4c9cf; border-radius: 1mm; overflow: hidden; }
 .box:last-child { border: .25mm solid #c4c9cf; }
 .sum-title { display: block; margin-bottom: 1mm; text-align: center; font-size: 7.4pt; font-weight: 900; text-transform: uppercase; }
+.client-document .tax-box .sum-title { display: none; }
 .methods { display: flex; justify-content: center; gap: 2.2mm; margin: 1mm 0 .8mm; white-space: nowrap; }
 .choice { display: inline-flex; align-items: center; gap: .6mm; font-size: 6.7pt; }
 .radio {
