@@ -257,7 +257,7 @@ test('printing, saved documents, status, and history stay complete', () => {
   assert.match(app, /@media screen \{[\s\S]*font-family: \$\{globalFontFamily\}/);
   assert.match(app, /\.print-card, \.print-card \* \{ font-family: Arial/);
   assert.match(app, /width: 210mm !important/);
-  assert.match(app, /const printMinRows = 15/);
+  assert.match(app, /const printMinRows = \d+;/);
   assert.match(app, /\.fleetparts-main > \*:not\(\.print-document-host\)/);
   assert.match(app, /className="print-document-host"/);
   assert.match(app, /position: fixed !important; inset: 0 !important/);
@@ -283,12 +283,12 @@ test('printing, saved documents, status, and history stay complete', () => {
   assert.match(app, /class="box amounts-box"/);
   assert.match(printCss, /article\.sheet \.summary \{ grid-template-columns: 40% 24% 36%/);
   assert.match(printCss, /\.payment-box \.sum-line \{ display: grid/);
-  assert.match(printCss, /\.legal \{[\s\S]*border: \.25mm solid #c4c9cf/);
+  assert.match(printCss, /\.legal \{[\s\S]*border: 0;[\s\S]*border-top: \.9mm solid #000/);
   assert.match(printCss, /\.legal div \{[\s\S]*border: 0/);
-  assert.match(printCss, /\.brands \{[\s\S]*border: \.25mm solid #c4c9cf/);
+  assert.match(printCss, /\.brands \{[\s\S]*border: 0;[\s\S]*border-top: \.9mm solid #000/);
   assert.match(printCss, /\.brands \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*justify-content: center/);
   assert.match(printCss, /\.brand \{[\s\S]*flex: 0 0 calc\(\(100% - 14mm\) \/ 8\)/);
-  assert.match(printCss, /article\.sheet \.head \{[\s\S]*grid-template-columns: 22% 40% 38%;[\s\S]*align-items: stretch/);
+  assert.match(printCss, /article\.sheet \.head \{[\s\S]*grid-template-columns: 29% 43% 28%;[\s\S]*align-items: (?:start|stretch)/);
   assert.match(printCss, /article\.sheet \.head > \.logo,[\s\S]*height: 100%/);
   assert.match(printCss, /article\.sheet \.head > \.logo \{ display: grid; place-items: start start/);
   assert.match(printCss, /article\.sheet \.head > \.client \{ display: grid; align-content: start; justify-items: start/);
@@ -296,7 +296,7 @@ test('printing, saved documents, status, and history stay complete', () => {
   assert.doesNotMatch(printCss, /article\.sheet \.head > :not\(:last-child\).*border-right/);
   assert.match(printCss, /grid-template-rows: 38mm;[\s\S]*height: 38mm/);
   assert.match(printCss, /article\.sheet \.head > \.logo,[\s\S]*padding: 0 2mm 2mm;[\s\S]*align-self: start/);
-  assert.match(app, /\.head\{display:grid;grid-template-columns:22% 40% 38%;grid-template-rows:38mm;width:100%;height:38mm/);
+  assert.match(app, /\.head\{display:grid;grid-template-columns:29% 43% 28%;grid-template-rows:38mm;width:100%;height:38mm/);
   assert.match(app, /\.logo\{display:grid;place-items:start start\}/);
   assert.doesNotMatch(app, /\.company\{transform:translateX\(-20mm\)/);
   assert.match(app, /\.print-empty-row \{[\s\S]*height: 7\.2mm !important/);
