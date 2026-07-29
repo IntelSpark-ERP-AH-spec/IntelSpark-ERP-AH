@@ -85,12 +85,31 @@ export function translateSql(source, { returning = false } = {}) {
   return returning ? appendReturning(sql) : sql.replace(/;\s*$/, '');
 }
 
+export function resolvePostgresConnectionString(connectionString, poolMode = process.env.PG_POOL_MODE || 'transaction') {
+  if (!connectionString) return connectionString;
+
+  let url;
+  try {
+    url = new URL(connectionString);
+  } catch {
+    return connectionString;
+  }
+
+  if (!url.hostname.endsWith('.pooler.supabase.com')) return connectionString;
+
+  const normalizedMode = String(poolMode || '').trim().toLowerCase();
+  if (normalizedMode === 'session') url.port = '5432';
+  if (normalizedMode === 'transaction') url.port = '6543';
+  return url.toString();
+}
+
 export function createPostgresAdapter(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL requis pour PostgreSQL');
   const queryTimeoutMillis = Math.max(1_000, Number(process.env.PG_QUERY_TIMEOUT_MS) || 30_000);
   const resultBufferBytes = Math.max(1024 * 1024, Number(process.env.PG_RESULT_BUFFER_BYTES) || 16 * 1024 * 1024);
+  const resolvedConnectionString = resolvePostgresConnectionString(connectionString);
   const worker = new Worker(new URL('./postgres-worker.js', import.meta.url), {
-    workerData: { connectionString, connectionTimeoutMillis: 10_000 },
+    workerData: { connectionString: resolvedConnectionString, connectionTimeoutMillis: 10_000 },
   });
 
   function invoke(payload) {
@@ -114,7 +133,12 @@ export function createPostgresAdapter(connectionString) {
     return invoke({ action: 'query', sql: translateSql(sql, options), params });
   }
 
-  invoke({ action: 'query', sql: 'SELECT 1 AS ok', params: [] });
+  try {
+    invoke({ action: 'query', sql: 'SELECT 1 AS ok', params: [] });
+  } catch (error) {
+    worker.terminate();
+    throw error;
+  }
 
   return {
     engine: 'postgres',

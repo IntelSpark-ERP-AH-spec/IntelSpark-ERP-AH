@@ -67,13 +67,17 @@ const COMPANY_KEY_TO_COLUMN = Object.freeze({
   is_company_address: 'company_address',
   is_company_phone: 'company_phone',
   is_company_email: 'company_email',
+  is_company_activity: 'company_activity',
   is_footer: 'legal_mentions',
   is_logo: 'logo_url',
   is_brands: 'brands_json',
 });
 
 const COMPANY_SCOPE_KEYS = Object.freeze({
-  identity: ['is_company_name', 'is_company_address', 'is_company_phone', 'is_company_email', 'is_logo'],
+  identity: [
+    'is_company_name', 'is_company_address', 'is_company_phone',
+    'is_company_email', 'is_company_activity', 'is_logo',
+  ],
   branding: ['is_footer', 'is_brands'],
   all: Object.keys(COMPANY_KEY_TO_COLUMN),
 });
@@ -83,6 +87,7 @@ const COMPANY_TEXT_LIMITS = Object.freeze({
   is_company_address: 500,
   is_company_phone: 100,
   is_company_email: 254,
+  is_company_activity: 500,
   is_footer: 5000,
 });
 
@@ -90,15 +95,28 @@ function companyAssetBaseUrl() {
   const supabaseUrl = String(
     process.env.SUPABASE_URL
       || process.env.VITE_SUPABASE_URL
-      || 'https://hozhnlzgbccrkdluqjcg.supabase.co',
-  ).replace(/\/$/, '');
-  return `${supabaseUrl}/storage/v1/object/public/company-assets/`;
+      || '',
+  )
+    .replace(/\/rest\/v1\/?$/i, '')
+    .replace(/\/$/, '');
+  return supabaseUrl ? `${supabaseUrl}/storage/v1/object/public/company-assets/` : '';
 }
 
 function normalizeCompanyAssetUrl(value) {
   if (value === null || value === undefined || value === '') return null;
   const candidate = String(value).trim();
-  if (!candidate || candidate.length > 2048) throw new Error('URL image invalide');
+  if (!candidate) throw new Error('URL image invalide');
+  if (candidate.startsWith('data:')) {
+    if (Buffer.byteLength(candidate, 'utf8') > 1024 * 1024) throw new Error('Image trop volumineuse');
+    const match = candidate.match(/^data:image\/(png|jpeg|webp);base64,([a-zA-Z0-9+/]+={0,2})$/);
+    if (!match || match[2].length % 4 !== 0) throw new Error('Image locale invalide');
+    const padding = match[2].endsWith('==') ? 2 : match[2].endsWith('=') ? 1 : 0;
+    const decodedBytes = (match[2].length * 3) / 4 - padding;
+    if (decodedBytes > 700 * 1024) throw new Error('Image trop volumineuse');
+    return candidate;
+  }
+  if (candidate.length > 2048) throw new Error('URL image invalide');
+  if (!companyAssetBaseUrl()) throw new Error('SUPABASE_URL manquant');
   let parsed;
   let expected;
   try {
@@ -204,6 +222,7 @@ function readCompanySettings(organizationId) {
   const result = {
     is_company_name: text(row.company_name), is_company_address: text(row.company_address),
     is_company_phone: text(row.company_phone), is_company_email: text(row.company_email),
+    is_company_activity: text(row.company_activity),
     is_footer: text(row.legal_mentions), is_logo: text(row.logo_url),
     is_brands: parseStoredJson(row.brands_json, []),
   };
@@ -211,13 +230,15 @@ function readCompanySettings(organizationId) {
   // Repair/read-through for databases migrated before company_settings was
   // introduced.  If the generic organization document has a newer value,
   // expose it immediately; the next write mirrors it back into the typed row.
+  const companyKeys = Object.keys(COMPANY_KEY_TO_COLUMN);
+  const companyKeyPlaceholders = companyKeys.map(() => '?').join(', ');
   const mirrors = dbQuery(
     `SELECT key, value_json, updated_at FROM organization_documents
-      WHERE organization_id = ? AND key IN (?, ?, ?, ?, ?, ?, ?)`,
-    [organizationId, ...Object.keys(COMPANY_KEY_TO_COLUMN)],
+      WHERE organization_id = ? AND key IN (${companyKeyPlaceholders})`,
+    [organizationId, ...companyKeys],
   );
   const mirrorByKey = new Map(mirrors.map(entry => [entry.key, entry]));
-  for (const key of Object.keys(COMPANY_KEY_TO_COLUMN)) {
+  for (const key of companyKeys) {
     const mirror = mirrorByKey.get(key);
     if (!mirror) continue;
     const typedUpdated = String(row.updated_at || '');

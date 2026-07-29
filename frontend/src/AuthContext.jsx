@@ -4,7 +4,8 @@ import { subscribeOrganization } from './supabaseRealtime';
 
 const AuthContext = createContext(null);
 const DATA_CHUNK_BYTES = 3 * 1024 * 1024;
-const LOAD_RETRY_DELAY_MS = 350;
+const LOAD_RETRY_DELAY_MS = 150;
+const REALTIME_COALESCE_DELAY_MS = 60;
 
 const wait = delay => new Promise(resolve => window.setTimeout(resolve, delay));
 
@@ -111,7 +112,7 @@ export function AuthProvider({ children }) {
         realtimeTimer = window.setTimeout(() => {
           realtimeTimer = null;
           emitOrganizationChange(latestRealtimePayload || {});
-        }, 250);
+        }, REALTIME_COALESCE_DELAY_MS);
       }, setRealtimeStatus);
     }).catch(error => {
       if (!cancelled) setSyncError(error.message || 'Synchronisation indisponible');

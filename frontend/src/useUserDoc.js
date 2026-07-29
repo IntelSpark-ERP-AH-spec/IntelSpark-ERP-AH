@@ -14,7 +14,7 @@ function authHeaders(method = 'GET') {
 /**
  * Hook de persistance automatique côté serveur pour des données spécifiques à l'utilisateur.
  * - Charge la donnée depuis /api/data/doc/:key au montage
- * - Sauvegarde AUTOMATIQUEMENT sur le serveur à chaque changement (debounce 400ms)
+ * - Sauvegarde AUTOMATIQUEMENT sur le serveur à chaque changement (debounce 250ms)
  * - Pas de localStorage : les données sont isolées par utilisateur mais survivent aux changements de session
  * - Upsert atomique par clé : pas de collision entre pages qui écrivent en parallèle
  *
@@ -69,7 +69,10 @@ export function useUserDoc(key, initial) {
 
   useEffect(() => {
     let cancelled = false;
-    const reload = async () => {
+    const reload = async (event) => {
+      const change = event?.detail || {};
+      if (change.entity && change.entity !== 'organization_documents') return;
+      if (change.key && change.key !== keyRef.current) return;
       if (savingRef.current) {
         deferredReloadRef.current = true;
         return;
@@ -144,7 +147,7 @@ export function useUserDoc(key, initial) {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       persist(data, keyRef.current);
-    }, 400);
+    }, 250);
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);

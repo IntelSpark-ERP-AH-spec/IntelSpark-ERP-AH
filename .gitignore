@@ -63,8 +63,7 @@ Thumbs.db
 
 # Sensitive files (auto-detected)
 .env
-.env.example
-node_modules
+node_modules/
 
 # Production secrets
 .env.production
@@ -95,4 +94,20 @@ code-review-graph/
 src/users.json
 
 # Local Netlify folder
-.netlify
+.netlify/
+
+# Additional local and sensitive files
+pnpm-debug.log*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+private/
+backups/
+*.sqlite
+*.sqlite3
+*.db
+tmp/
+*.code-workspace
+/test-projet-1.txt.bmp

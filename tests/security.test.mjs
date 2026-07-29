@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import { createRequire } from 'node:module';
 
@@ -102,6 +103,8 @@ test('smtp passwords never return through profile endpoint', () => {
   assert.match(mailUi, /cd-mail-detail/);
   assert.match(mailUi, /Expéditeur inconnu/);
   assert.match(migrations, /20260716_010_gmail_inbox/);
+  assert.match(migrations, /LEGACY_MIGRATION_CHECKSUMS/);
+  assert.match(migrations, /acceptedLegacyChecksums\?\.has\(appliedChecksum\)/);
 });
 
 test('team documents require optimistic concurrency', () => {
@@ -407,6 +410,8 @@ test('document navigation resumes the open page without creating another one', (
 test('company edits autosave without shared-loading error flashes', () => {
   const app = source('frontend/src/App.jsx');
   const auth = source('frontend/src/AuthContext.jsx');
+  const vite = source('frontend/vite.config.js');
+  const userDoc = source('frontend/src/useUserDoc.js');
   assert.match(app, /const COMPANY_IDENTITY_KEYS = new Set/);
   assert.match(app, /const companyRevisionRef = useRef\(new Map\(\)\)/);
   assert.match(app, /saveCompanySettings\(scope, \{ silent: true \}\)/);
@@ -415,6 +420,14 @@ test('company edits autosave without shared-loading error flashes', () => {
   assert.match(auth, /for \(let attempt = 0; attempt < 2; attempt \+= 1\)/);
   assert.doesNotMatch(`${app}\n${auth}`, /Chargement partag.{0,30}impossible/);
   assert.doesNotMatch(app, /syncError \|\| 'Synchronisation Supabase/);
+  assert.doesNotMatch(app, /Synchronisation Supabase…|Reconnexion temps réel…/);
+  assert.match(auth, /const REALTIME_COALESCE_DELAY_MS = 60/);
+  assert.match(vite, /envDir:\s*'\.\.'/);
+  assert.match(vite, /loadEnv\(mode, '\.\.', ''\)/);
+  assert.match(vite, /env\.VITE_SUPABASE_URL \|\| env\.SUPABASE_URL/);
+  assert.doesNotMatch(vite, /envPrefix:\s*''/);
+  assert.match(userDoc, /change\.entity !== 'organization_documents'/);
+  assert.match(userDoc, /change\.key !== keyRef\.current/);
 });
 
 test('disaster recovery drill validates critical data', () => {
@@ -428,7 +441,7 @@ test('disaster recovery drill validates critical data', () => {
 
   try {
     const output = execFileSync(process.execPath, ['scripts/disaster-recovery-drill.mjs'], {
-      cwd: path.resolve(new URL('..', import.meta.url).pathname.replace(/^\/(?:([A-Za-z]:))/, '$1')),
+      cwd: fileURLToPath(new URL('..', import.meta.url)),
       env: { ...process.env, BACKUP_FILE: backupPath },
       encoding: 'utf8',
       windowsHide: true,

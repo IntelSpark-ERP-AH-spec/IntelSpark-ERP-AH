@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { translateSql } from '../backend/postgres-compat.js';
+import { resolvePostgresConnectionString, translateSql } from '../backend/postgres-compat.js';
+
+test('uses Supabase transaction pooling by default', () => {
+  const sessionUrl = 'postgresql://postgres.project:secret@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
+  assert.equal(
+    resolvePostgresConnectionString(sessionUrl),
+    'postgresql://postgres.project:secret@aws-0-eu-west-1.pooler.supabase.com:6543/postgres',
+  );
+  assert.equal(resolvePostgresConnectionString(sessionUrl, 'session'), sessionUrl);
+});
 
 test('convertit paramètres sans toucher aux chaînes', () => {
   assert.equal(

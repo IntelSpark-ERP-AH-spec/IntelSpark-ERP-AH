@@ -124,6 +124,8 @@ test('production server supports one hundred authenticated users', { timeout: 60
       METRICS_TOKEN: 'integration-metrics-token',
       GROQ_API_KEY: '',
       DATABASE_URL: '',
+      SUPABASE_URL: 'https://hozhnlzgbccrkdluqjcg.supabase.co',
+      VITE_SUPABASE_URL: '',
     },
   });
 
@@ -459,6 +461,7 @@ test('production server supports one hundred authenticated users', { timeout: 60
         is_company_address: 'Casablanca',
         is_company_phone: '+212500000000',
         is_company_email: 'contact@intelspark.test',
+        is_company_activity: 'Importateur et distributeur test',
         is_logo: sharedLogoUrl,
       }),
     });
@@ -479,9 +482,19 @@ test('production server supports one hundred authenticated users', { timeout: 60
     assert.equal(sharedAdminLoad.status, 200, output);
     const sharedAdminData = await sharedAdminLoad.json();
     assert.equal(sharedAdminData.is_company_name, 'IntelSpark ERP-AH');
+    assert.equal(sharedAdminData.is_company_activity, 'Importateur et distributeur test');
     assert.equal(sharedAdminData.is_logo, sharedLogoUrl);
     assert.equal(sharedAdminData.is_footer, 'Mentions légales partagées');
     assert.deepEqual(sharedAdminData.is_brands, [{ id: 'shared-brand', name: 'Marque partagée', logo: sharedBrandUrl }]);
+
+    const inlineLogo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const saveInlineLogo = await fetch(`${baseUrl}/api/data/company-settings/identity`, {
+      method: 'PUT',
+      headers: writeHeaders,
+      body: JSON.stringify({ is_logo: inlineLogo }),
+    });
+    assert.equal(saveInlineLogo.status, 200, output);
+    assert.equal((await saveInlineLogo.json()).settings.is_logo, inlineLogo);
 
     const nonAdminCompanyWrite = await fetch(`${baseUrl}/api/data/company-settings/identity`, {
       method: 'PUT',

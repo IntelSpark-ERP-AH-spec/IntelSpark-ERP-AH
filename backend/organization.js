@@ -38,11 +38,16 @@ export function organizationIdForUser(user) {
 
 export function organizationContextForUser(user) {
   const organization = ensureOrganizationForUser(user?.id);
-  const supabaseUrl = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hozhnlzgbccrkdluqjcg.supabase.co').replace(/\/$/, '');
+  const remoteLogoUploadEnabled = String(process.env.SUPABASE_LOGO_UPLOAD_ENABLED || '').toLowerCase() === 'true';
+  const supabaseUrl = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '')
+    .replace(/\/rest\/v1\/?$/i, '')
+    .replace(/\/$/, '');
   return {
     id: organization.id,
     name: organization.name,
     realtime_topic: organization.realtime_topic,
-    logo_upload_url: supabaseUrl ? `${supabaseUrl}/functions/v1/company-logo-upload` : null,
+    logo_upload_url: remoteLogoUploadEnabled && supabaseUrl
+      ? `${supabaseUrl}/functions/v1/company-logo-upload`
+      : null,
   };
 }

@@ -1,7 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = String(import.meta.env.VITE_SUPABASE_URL || 'https://hozhnlzgbccrkdluqjcg.supabase.co').replace(/\/$/, '');
-const publishableKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_SJEziwczIuyhec6nsH5tzA_jHdJlB-t');
+const url = String(import.meta.env.VITE_SUPABASE_URL || '')
+  .replace(/\/rest\/v1\/?$/i, '')
+  .replace(/\/$/, '');
+const publishableKey = String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
 
 const client = url && publishableKey
   ? createClient(url, publishableKey, {

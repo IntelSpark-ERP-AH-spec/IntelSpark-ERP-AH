@@ -170,8 +170,8 @@ if (!isDev && process.env.FORCE_HTTPS === 'true') {
     return res.redirect(308, `${publicOrigin}${req.originalUrl}`);
   });
 }
-app.use(express.json({ limit: '500kb' }));
-app.use(express.urlencoded({ extended: true, limit: '500kb' }));
+app.use(express.json({ limit: '8mb' }));
+app.use(express.urlencoded({ extended: true, limit: '8mb' }));
 app.use(cookieParser());
 app.use('/api/', (req, res, next) => {
   const requestId = String(req.headers['x-request-id'] || crypto.randomUUID()).slice(0, 128);

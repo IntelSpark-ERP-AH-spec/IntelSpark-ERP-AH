@@ -1,5 +1,18 @@
 import crypto from 'crypto';
 
+function getTableColumns(db, table) {
+  if (db.engine === 'postgres') {
+    return new Set(
+      db.prepare(`
+        SELECT column_name AS name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ?
+      `).all(table).map((entry) => entry.name),
+    );
+  }
+  return new Set(db.prepare(`PRAGMA table_info('${table}')`).all().map((entry) => entry.name));
+}
+
 const migrations = [
   {
     version: '20260713_001_enterprise_core',
@@ -91,7 +104,7 @@ const migrations = [
     version: '20260713_006_drop_twofa_columns',
     description: 'Suppression colonnes authentification double',
     up(db) {
-      const columns = new Set(db.prepare("PRAGMA table_info('users')").all().map((column) => column.name));
+      const columns = getTableColumns(db, 'users');
       if (columns.has('twofa_secret')) db.exec('ALTER TABLE users DROP COLUMN twofa_secret');
       if (columns.has('twofa_enabled')) db.exec('ALTER TABLE users DROP COLUMN twofa_enabled');
     },
@@ -175,14 +188,18 @@ const migrations = [
     version: '20260716_010_gmail_inbox',
     description: 'Boite Gmail continue, limite post-connexion, lecture et notifications',
     up(db) {
-      db.exec('ALTER TABLE users ADD COLUMN mail_connected_at TEXT');
-      db.exec('ALTER TABLE users ADD COLUMN mail_last_uid INTEGER NOT NULL DEFAULT 0');
-      db.exec('ALTER TABLE users ADD COLUMN mail_uid_validity TEXT');
-      db.exec('ALTER TABLE users ADD COLUMN mail_last_sync_at TEXT');
-      db.exec('ALTER TABLE email_history ADD COLUMN sender_name TEXT');
-      db.exec('ALTER TABLE email_history ADD COLUMN sender_email TEXT');
-      db.exec('ALTER TABLE email_history ADD COLUMN account_email TEXT');
-      db.exec('ALTER TABLE email_history ADD COLUMN is_read INTEGER NOT NULL DEFAULT 1');
+      const addColumn = (table, column, definition) => {
+        const columns = getTableColumns(db, table);
+        if (!columns.has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      };
+      addColumn('users', 'mail_connected_at', 'TEXT');
+      addColumn('users', 'mail_last_uid', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn('users', 'mail_uid_validity', 'TEXT');
+      addColumn('users', 'mail_last_sync_at', 'TEXT');
+      addColumn('email_history', 'sender_name', 'TEXT');
+      addColumn('email_history', 'sender_email', 'TEXT');
+      addColumn('email_history', 'account_email', 'TEXT');
+      addColumn('email_history', 'is_read', 'INTEGER NOT NULL DEFAULT 1');
       db.exec(`UPDATE users SET mail_connected_at = datetime('now'), mail_last_uid = -1
         WHERE smtp_user IS NOT NULL AND smtp_user != '' AND smtp_pass IS NOT NULL AND smtp_pass != ''
           AND mail_connected_at IS NULL`);
@@ -239,7 +256,7 @@ const migrations = [
         .run('org_default', 'IntelSpark ERP-AH', crypto.randomBytes(32).toString('hex'));
 
       const addColumn = (table, column, definition) => {
-        const columns = new Set(db.prepare(`SELECT name FROM pragma_table_info('${table}')`).all().map((entry) => entry.name));
+        const columns = getTableColumns(db, table);
         if (!columns.has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
       };
       addColumn('users', 'organization_id', "TEXT DEFAULT 'org_default'");
@@ -297,7 +314,33 @@ const migrations = [
       }
     },
   },
+  {
+    version: '20260729_014_company_activity',
+    description: 'Activite entreprise modifiable et partagee',
+    up(db) {
+      const columns = getTableColumns(db, 'company_settings');
+      if (!columns.has('company_activity')) {
+        db.exec(`ALTER TABLE company_settings ADD COLUMN company_activity TEXT NOT NULL
+          DEFAULT 'Importateur et Distributeur de Piece de Rechange de Poids Lourd'`);
+      }
+      db.exec(`UPDATE company_settings
+        SET company_activity = 'Importateur et Distributeur de Piece de Rechange de Poids Lourd'
+        WHERE company_activity IS NULL OR trim(company_activity) = ''`);
+    },
+  },
 ];
+
+const LEGACY_MIGRATION_CHECKSUMS = new Map([
+  ['20260713_006_drop_twofa_columns', new Set([
+    '44f3192708f2b78a0870cb98c440c132acb186560099db87e46f3496473d248a',
+  ])],
+  ['20260716_010_gmail_inbox', new Set([
+    '6ff7cb5df1c583a6362b27e36595ecd02948812c0feb94e0aeddea22510dbd06',
+  ])],
+  ['20260718_013_organization_sync', new Set([
+    'b9f21617e784e637cf8c19e863627519d74be8de245a7622b5be4d5f8e227df0',
+  ])],
+]);
 
 function checksum(migration) {
   return crypto.createHash('sha256')
@@ -324,7 +367,9 @@ export function runMigrations(db) {
   for (const migration of migrations) {
     const migrationChecksum = checksum(migration);
     if (applied.has(migration.version)) {
-      if (applied.get(migration.version) !== migrationChecksum) {
+      const appliedChecksum = applied.get(migration.version);
+      const acceptedLegacyChecksums = LEGACY_MIGRATION_CHECKSUMS.get(migration.version);
+      if (appliedChecksum !== migrationChecksum && !acceptedLegacyChecksums?.has(appliedChecksum)) {
         throw new Error(`Migration modifiee apres application: ${migration.version}`);
       }
       continue;
