@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbRun } from '../db.js';
 import { generateToken, authMiddleware, blacklistToken, checkLoginLockout, recordLoginAttempt, validatePassword } from '../auth.js';
-import { decryptSecret, encryptSecret, isEncryptedSecret, upgradeSecret } from '../secrets.js';
-import { mailboxBoundary } from '../mail-sync-service.js';
+import {
+  decryptedPasswordForAccount,
+  deletePersonalEmailAccount,
+  getPersonalEmailAccount,
+  resolveAuthorizedEmailAccount,
+  savePersonalEmailAccount,
+  testEmailCredentials,
+} from '../email-account-service.js';
 
 const router = Router();
 
@@ -63,55 +68,52 @@ router.put('/me', authMiddleware, (req, res) => {
 });
 
 router.get('/me/smtp', authMiddleware, (req, res) => {
-  const user = dbGet(`SELECT smtp_user, smtp_pass, mail_connected_at, mail_last_sync_at
-    FROM users WHERE id = ?`, [req.user.id]);
-  if (user?.smtp_pass && !isEncryptedSecret(user.smtp_pass)) {
-    dbRun('UPDATE users SET smtp_pass = ? WHERE id = ?', [upgradeSecret(user.smtp_pass), req.user.id]);
-  }
+  const account = getPersonalEmailAccount(req.user);
   res.json({
-    smtp_user: user?.smtp_user || '',
-    smtp_configured: Boolean(user?.smtp_user && user?.smtp_pass),
-    mail_connected_at: user?.mail_connected_at || null,
-    mail_last_sync_at: user?.mail_last_sync_at || null,
+    smtp_user: account?.email_address || '',
+    smtp_configured: Boolean(account?.configured),
+    mail_connected_at: account?.mail_connected_at || null,
+    mail_last_sync_at: account?.mail_last_sync_at || null,
+    account_id: account?.id || null,
   });
 });
 
 router.put('/me/smtp', authMiddleware, async (req, res) => {
-  const { smtp_user, smtp_pass, clear } = req.body;
-  if (clear === true) {
-    dbRun(`UPDATE users SET smtp_user = '', smtp_pass = '', mail_connected_at = NULL,
-      mail_last_uid = 0, mail_uid_validity = NULL, mail_last_sync_at = NULL WHERE id = ?`, [req.user.id]);
+  if (req.body?.clear === true) {
+    deletePersonalEmailAccount(req.user);
     return res.json({ success: true, smtp_configured: false });
   }
-  const normalizedEmail = String(smtp_user || '').trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    return res.status(400).json({ error: 'Adresse email invalide' });
-  }
-  const existing = dbGet(`SELECT smtp_user, smtp_pass, mail_connected_at, mail_last_uid, mail_uid_validity
-    FROM users WHERE id = ?`, [req.user.id]);
-  const suppliedPassword = typeof smtp_pass === 'string' ? smtp_pass.replace(/\s+/g, '') : '';
-  const nextPassword = suppliedPassword ? encryptSecret(suppliedPassword) : upgradeSecret(existing?.smtp_pass || '');
-  if (!nextPassword) return res.status(400).json({ error: 'Mot de passe applicatif requis' });
-  const accountChanged = normalizedEmail !== String(existing?.smtp_user || '').trim().toLowerCase();
-  const needsBoundary = accountChanged || Boolean(suppliedPassword) || !existing?.mail_connected_at;
   try {
-    if (needsBoundary) {
-      const plainPassword = suppliedPassword || decryptSecret(nextPassword);
-      const boundary = await mailboxBoundary(normalizedEmail, plainPassword);
-      dbRun(`UPDATE users SET smtp_user = ?, smtp_pass = ?, mail_connected_at = ?, mail_last_uid = ?,
-        mail_uid_validity = ?, mail_last_sync_at = NULL WHERE id = ?`,
-      [normalizedEmail, nextPassword, boundary.connected_at, boundary.last_uid, boundary.uid_validity, req.user.id]);
-      return res.json({ success: true, smtp_configured: true, mail_connected_at: boundary.connected_at });
+    const result = await savePersonalEmailAccount(req.user, req.body || {});
+    if (result.status !== 'connected') {
+      return res.status(422).json({ error: 'Connexion Gmail impossible', status: result.status });
     }
-    dbRun('UPDATE users SET smtp_user = ?, smtp_pass = ? WHERE id = ?', [normalizedEmail, nextPassword, req.user.id]);
-    return res.json({ success: true, smtp_configured: true, mail_connected_at: existing.mail_connected_at });
-  } catch (error) {
-    const authenticationFailed = error?.authenticationFailed || error?.responseStatus === 'NO';
-    return res.status(502).json({
-      error: authenticationFailed
-        ? 'Connexion messagerie refusee. Verifiez adresse et secret.'
-        : 'Connexion messagerie impossible. Reessayez dans quelques instants.',
+    return res.json({
+      success: true,
+      smtp_configured: true,
+      mail_connected_at: result.account.mail_connected_at,
+      account_id: result.account.id,
     });
+  } catch (error) {
+    return res.status(Number(error?.status || 400)).json({ error: error?.message || 'Configuration Gmail impossible' });
+  }
+});
+
+router.post('/me/smtp/test', authMiddleware, async (req, res) => {
+  const existing = getPersonalEmailAccount(req.user);
+  let password = String(req.body?.smtp_pass || '').replace(/\s+/g, '');
+  let emailAddress = String(req.body?.smtp_user || existing?.email_address || '').trim().toLowerCase();
+  try {
+    if (!password && existing?.id) {
+      const account = resolveAuthorizedEmailAccount(req.user, existing.id, 'send');
+      password = decryptedPasswordForAccount(account);
+      emailAddress = account.email_address;
+    }
+    return res.json(await testEmailCredentials({ emailAddress, password }));
+  } catch {
+    return res.json({ status: 'configuration_incomplete' });
+  } finally {
+    password = '';
   }
 });
 

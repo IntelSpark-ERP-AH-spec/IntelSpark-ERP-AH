@@ -1,11 +1,14 @@
 import { Router, raw } from 'express';
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { v4 as uuidv4 } from 'uuid';
 import { dbQuery, dbRun, dbTransaction } from '../db.js';
 import { authMiddleware, VALID_ROLES } from '../auth.js';
 import { sendToUser, sendToRole } from '../websocket.js';
+import {
+  deleteMessagePdf,
+  messagePdfExists,
+  messagePdfPath,
+  writeMessagePdf,
+} from '../message-pdf-storage.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -15,12 +18,6 @@ const RECEIVED_DOCUMENT_ROLES = new Set(['admin', 'commercial', 'magasinier', 'c
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_DOCUMENT_BYTES = 128 * 1024;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
-const ROUTE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PDF_DIR = (process.env.NETLIFY === 'true' || process.env.AWS_LAMBDA_FUNCTION_NAME)
-  ? path.join('/tmp', 'message-pdfs')
-  : path.resolve(ROUTE_DIR, '..', 'uploads', 'message-pdfs');
-const PDF_UPLOAD_DIR = path.resolve(process.env.MESSAGE_PDF_DIR || DEFAULT_PDF_DIR);
-mkdirSync(PDF_UPLOAD_DIR, { recursive: true });
 
 function msgSelect() {
   return `SELECT m.*, u.username as sender_name, u.role as sender_role, u.full_name as sender_full_name
@@ -50,11 +47,6 @@ function safePdfName(value) {
   return normalized.toLowerCase().endsWith('.pdf') ? normalized : `${normalized || 'document'}.pdf`;
 }
 
-function pdfPath(fileId) {
-  if (!/^[0-9a-f-]{36}$/i.test(String(fileId || ''))) return null;
-  return path.join(PDF_UPLOAD_DIR, `${fileId}.pdf`);
-}
-
 function serializeMessage(row) {
   if (!row) return row;
   const message = { ...row };
@@ -82,8 +74,9 @@ function validateDocumentAttachment(docType, docId, document) {
 
 router.get('/users', (req, res) => {
   const users = dbQuery(
-    `SELECT id, username, role, full_name, department FROM users WHERE active=1 AND id != ? ORDER BY username`,
-    [req.user.id]
+    `SELECT id, username, role, full_name, department
+     FROM users WHERE active=1 AND id != ? AND organization_id = ? ORDER BY username`,
+    [req.user.id, req.user.organization_id]
   );
   res.json(users);
 });
@@ -91,9 +84,9 @@ router.get('/users', (req, res) => {
 router.get('/unread-count', (req, res) => {
   const count = dbQuery(
     `SELECT COUNT(*) as total FROM messages
-     WHERE read = 0 AND sender_id != ? AND (recipient_id = ? OR recipient_role = ?)
+     WHERE organization_id = ? AND read = 0 AND sender_id != ? AND (recipient_id = ? OR recipient_role = ?)
        AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = messages.id AND md.user_id = ?)`,
-    [req.user.id, req.user.id, req.user.role, req.user.id]
+    [req.user.organization_id, req.user.id, req.user.id, req.user.role, req.user.id]
   )[0].total;
   res.json({ count });
 });
@@ -104,13 +97,14 @@ router.get('/received-documents', (req, res) => {
   }
   const placeholders = [...ALLOWED_DOCUMENT_TYPES].map(() => '?').join(',');
   const rows = dbQuery(`${msgSelect()}
-    WHERE m.sender_id != ?
+    WHERE m.organization_id = ?
+      AND m.sender_id != ?
       AND m.doc_payload IS NOT NULL
       AND m.doc_type IN (${placeholders})
       AND (m.recipient_id = ? OR (m.recipient_id IS NULL AND m.recipient_role = ?))
       AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = m.id AND md.user_id = ?)
     ORDER BY m.created_at DESC
-    LIMIT 500`, [req.user.id, ...ALLOWED_DOCUMENT_TYPES, req.user.id, req.user.role, req.user.id]);
+    LIMIT 500`, [req.user.organization_id, req.user.id, ...ALLOWED_DOCUMENT_TYPES, req.user.id, req.user.role, req.user.id]);
   return res.json(rows.map(serializeMessage));
 });
 
@@ -125,7 +119,8 @@ router.get('/conversations', (req, res) => {
         CASE WHEN sender_id = ? THEN 'user' ELSE 'user' END as conv_type,
         id, sender_id, recipient_id, recipient_role, content, created_at, read
       FROM messages m
-      WHERE ((sender_id = ? AND recipient_id IS NOT NULL)
+      WHERE m.organization_id = ?
+        AND ((sender_id = ? AND recipient_id IS NOT NULL)
          OR (recipient_id = ?))
         AND NOT EXISTS (
           SELECT 1 FROM message_deletions md
@@ -136,7 +131,7 @@ router.get('/conversations', (req, res) => {
       SELECT sender_id as other_id, 'role' as conv_type,
         id, sender_id, recipient_id, recipient_role, content, created_at, read
       FROM messages m
-      WHERE recipient_role = ? AND sender_id != ? AND recipient_id IS NULL
+      WHERE m.organization_id = ? AND recipient_role = ? AND sender_id != ? AND recipient_id IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM message_deletions md
           WHERE md.message_id = m.id AND md.user_id = ?
@@ -157,7 +152,7 @@ router.get('/conversations', (req, res) => {
       u.full_name as other_full_name,
       u.role as other_role,
       (SELECT COUNT(*) FROM messages
-       WHERE read = 0 AND sender_id = am.other_id
+       WHERE organization_id = ? AND read = 0 AND sender_id = am.other_id
          AND (recipient_id = ? OR recipient_role = ?)
          AND sender_id != ?
          AND NOT EXISTS (
@@ -169,7 +164,11 @@ router.get('/conversations', (req, res) => {
     JOIN users u ON u.id = am.other_id
     ORDER BY am.created_at DESC
     LIMIT 50
-  `, [userId, userId, userId, userId, userId, role, userId, userId, userId, role, userId, userId]);
+  `, [
+    userId, userId, req.user.organization_id, userId, userId, userId,
+    req.user.organization_id, role, userId, userId,
+    req.user.organization_id, userId, role, userId, userId,
+  ]);
 
   const roleConvos = dbQuery(`
     SELECT m.*, 'role' as conv_type,
@@ -179,20 +178,21 @@ router.get('/conversations', (req, res) => {
       m.recipient_role as other_role,
       0 as unread_count
     FROM messages m
-    WHERE m.sender_id = ? AND m.recipient_role IS NOT NULL
+    WHERE m.organization_id = ? AND m.sender_id = ? AND m.recipient_role IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM message_deletions md
         WHERE md.message_id = m.id AND md.user_id = ?
       )
       AND m.created_at = (
         SELECT MAX(latest.created_at) FROM messages latest
-        WHERE latest.sender_id = m.sender_id AND latest.recipient_role = m.recipient_role
+        WHERE latest.organization_id = m.organization_id
+          AND latest.sender_id = m.sender_id AND latest.recipient_role = m.recipient_role
           AND NOT EXISTS (
             SELECT 1 FROM message_deletions md
             WHERE md.message_id = latest.id AND md.user_id = ?
           )
       )
-  `, [userId, userId, userId]);
+  `, [req.user.organization_id, userId, userId, userId]);
 
   res.json([...convos, ...roleConvos].sort((left, right) => String(right.created_at).localeCompare(String(left.created_at))).slice(0, 50));
 });
@@ -202,16 +202,16 @@ router.get('/', (req, res) => {
   const userId = req.user.id;
   const role = req.user.role;
   let sql = msgSelect();
-  const params = [];
+  const params = [req.user.organization_id];
 
   if (with_role) {
-    sql += ` WHERE ((m.recipient_role = ? AND m.sender_id = ?) OR (m.recipient_id = ? AND u.role = ?))`;
+    sql += ` WHERE m.organization_id = ? AND ((m.recipient_role = ? AND m.sender_id = ?) OR (m.recipient_id = ? AND u.role = ?))`;
     params.push(with_role, userId, userId, with_role);
   } else if (with_user) {
-    sql += ` WHERE ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))`;
+    sql += ` WHERE m.organization_id = ? AND ((m.sender_id = ? AND m.recipient_id = ?) OR (m.sender_id = ? AND m.recipient_id = ?))`;
     params.push(userId, with_user, with_user, userId);
   } else {
-    sql += ` WHERE ${userMessageCondition(userId, role)}`;
+    sql += ` WHERE m.organization_id = ? AND ${userMessageCondition(userId, role)}`;
     params.push(...userMessageParams(userId, role));
   }
 
@@ -237,7 +237,10 @@ router.post('/pdf', raw({ type: 'application/pdf', limit: MAX_PDF_BYTES }), (req
     return res.status(400).json({ error: 'Role destinataire invalide' });
   }
   if (recipientId) {
-    const recipient = dbQuery('SELECT id FROM users WHERE id = ? AND active = 1', [recipientId])[0];
+    const recipient = dbQuery(
+      'SELECT id FROM users WHERE id = ? AND active = 1 AND organization_id = ?',
+      [recipientId, req.user.organization_id],
+    )[0];
     if (!recipient) return res.status(404).json({ error: 'Destinataire introuvable' });
   }
 
@@ -250,24 +253,26 @@ router.post('/pdf', raw({ type: 'application/pdf', limit: MAX_PDF_BYTES }), (req
   const cleanContent = decodeHeader(req.get('x-message-content')).trim().slice(0, 1000);
   const fileId = uuidv4();
   const messageId = uuidv4();
-  const filePath = pdfPath(fileId);
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
   const payload = JSON.stringify({ kind: 'pdf', name: fileName, size: bytes.length, mime: 'application/pdf' });
 
   try {
-    writeFileSync(filePath, bytes, { flag: 'wx' });
+    writeMessagePdf(fileId, bytes);
     dbRun(
-      'INSERT INTO messages (id, sender_id, recipient_id, recipient_role, content, doc_type, doc_id, doc_payload, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      [messageId, req.user.id, recipientId, recipientRole, cleanContent, 'PDF', fileId, payload, now]
+      'INSERT INTO messages (id, organization_id, sender_id, recipient_id, recipient_role, content, doc_type, doc_id, doc_payload, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [messageId, req.user.organization_id, req.user.id, recipientId, recipientRole, cleanContent, 'PDF', fileId, payload, now]
     );
   } catch {
-    try { if (filePath && existsSync(filePath)) unlinkSync(filePath); } catch {}
+    try { deleteMessagePdf(fileId); } catch {}
     return res.status(500).json({ error: 'Envoi du PDF impossible' });
   }
 
-  const row = serializeMessage(dbQuery(`${msgSelect()} WHERE m.id = ?`, [messageId])[0]);
+  const row = serializeMessage(dbQuery(
+    `${msgSelect()} WHERE m.id = ? AND m.organization_id = ?`,
+    [messageId, req.user.organization_id],
+  )[0]);
   if (recipientId) sendToUser(recipientId, { type: 'chat_message', message: row });
-  if (recipientRole) sendToRole(recipientRole, { type: 'chat_message', message: row });
+  if (recipientRole) sendToRole(recipientRole, { type: 'chat_message', message: row }, req.user.organization_id);
   return res.json(row);
 });
 
@@ -279,43 +284,64 @@ router.post('/delete-selection', (req, res) => {
 
   const placeholders = ids.map(() => '?').join(',');
   const visibleRows = dbQuery(
-    `SELECT m.* FROM messages m WHERE m.id IN (${placeholders}) AND ${userMessageCondition(req.user.id, req.user.role)}`,
-    [...ids, ...userMessageParams(req.user.id, req.user.role)]
+    `SELECT m.* FROM messages m
+     WHERE m.id IN (${placeholders}) AND m.organization_id = ?
+       AND ${userMessageCondition(req.user.id, req.user.role)}`,
+    [...ids, req.user.organization_id, ...userMessageParams(req.user.id, req.user.role)]
   );
+  const permanentlyDeletedRows = visibleRows.filter(row => (
+    req.user.role === 'admin' || String(row.sender_id) === String(req.user.id)
+  ));
+  const hiddenRows = visibleRows.filter(row => !permanentlyDeletedRows.includes(row));
+
   dbTransaction(() => {
-    for (const row of visibleRows) {
-      dbRun('DELETE FROM messages WHERE id = ?', [row.id]);
+    for (const row of permanentlyDeletedRows) {
+      dbRun('DELETE FROM messages WHERE id = ? AND organization_id = ?', [
+        row.id,
+        req.user.organization_id,
+      ]);
+    }
+    for (const row of hiddenRows) {
+      dbRun(`INSERT INTO message_deletions(message_id,user_id,created_at)
+        VALUES (?,?,datetime('now'))
+        ON CONFLICT(message_id,user_id) DO NOTHING`, [
+        row.id,
+        req.user.id,
+      ]);
     }
   });
 
-  for (const row of visibleRows) {
+  for (const row of permanentlyDeletedRows) {
     if (row.doc_type === 'PDF') {
-      const filePath = pdfPath(row.doc_id);
-      try { if (filePath && existsSync(filePath)) unlinkSync(filePath); } catch {}
+      try { deleteMessagePdf(row.doc_id); } catch {}
     }
     sendToUser(row.sender_id, { type: 'chat_message_deleted', id: row.id });
     if (row.recipient_id) sendToUser(row.recipient_id, { type: 'chat_message_deleted', id: row.id });
-    if (row.recipient_role) sendToRole(row.recipient_role, { type: 'chat_message_deleted', id: row.id });
+    if (row.recipient_role) {
+      sendToRole(row.recipient_role, { type: 'chat_message_deleted', id: row.id }, req.user.organization_id);
+    }
   }
 
   return res.json({
     success: true,
-    permanent: true,
+    permanent: hiddenRows.length === 0,
     deleted: visibleRows.length,
+    permanently_deleted: permanentlyDeletedRows.length,
+    hidden: hiddenRows.length,
     ids: visibleRows.map(row => row.id),
   });
 });
 
 router.get('/:id/pdf', (req, res) => {
   const row = dbQuery(`SELECT m.* FROM messages m
-    WHERE m.id = ? AND m.doc_type = 'PDF'
+    WHERE m.id = ? AND m.organization_id = ? AND m.doc_type = 'PDF'
       AND ${userMessageCondition(req.user.id, req.user.role)}
       AND NOT EXISTS (SELECT 1 FROM message_deletions md WHERE md.message_id = m.id AND md.user_id = ?)`,
-  [req.params.id, ...userMessageParams(req.user.id, req.user.role), req.user.id])[0];
+  [req.params.id, req.user.organization_id, ...userMessageParams(req.user.id, req.user.role), req.user.id])[0];
   if (!row || !visibleToUser(row, req.user)) return res.status(404).json({ error: 'PDF introuvable' });
 
-  const filePath = pdfPath(row.doc_id);
-  if (!filePath || !existsSync(filePath)) return res.status(404).json({ error: 'Fichier PDF introuvable' });
+  const filePath = messagePdfPath(row.doc_id);
+  if (!filePath || !messagePdfExists(row.doc_id)) return res.status(404).json({ error: 'Fichier PDF introuvable' });
   let metadata = {};
   try { metadata = JSON.parse(row.doc_payload || '{}'); } catch {}
   const fileName = safePdfName(metadata.name);
@@ -336,7 +362,10 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'Role destinataire invalide' });
   }
   if (recipient_id) {
-    const recipient = dbQuery('SELECT id FROM users WHERE id = ? AND active = 1', [recipient_id])[0];
+    const recipient = dbQuery(
+      'SELECT id FROM users WHERE id = ? AND active = 1 AND organization_id = ?',
+      [recipient_id, req.user.organization_id],
+    )[0];
     if (!recipient) return res.status(404).json({ error: 'Destinataire introuvable' });
   }
 
@@ -350,14 +379,19 @@ router.post('/', (req, res) => {
   const id = uuidv4();
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
   dbRun(
-    'INSERT INTO messages (id, sender_id, recipient_id, recipient_role, content, doc_type, doc_id, doc_payload, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-    [id, req.user.id, recipient_id || null, recipient_role || null, cleanContent || `${attachment.docType} ${document.number}`, attachment.docType, attachment.docId, attachment.payload, now]
+    'INSERT INTO messages (id, organization_id, sender_id, recipient_id, recipient_role, content, doc_type, doc_id, doc_payload, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [id, req.user.organization_id, req.user.id, recipient_id || null, recipient_role || null, cleanContent || `${attachment.docType} ${document.number}`, attachment.docType, attachment.docId, attachment.payload, now]
   );
 
-  const row = serializeMessage(dbQuery(`${msgSelect()} WHERE m.id = ?`, [id])[0]);
+  const row = serializeMessage(dbQuery(
+    `${msgSelect()} WHERE m.id = ? AND m.organization_id = ?`,
+    [id, req.user.organization_id],
+  )[0]);
 
   if (recipient_id) sendToUser(recipient_id, { type: 'chat_message', message: row });
-  if (recipient_role) sendToRole(recipient_role, { type: 'chat_message', message: row });
+  if (recipient_role) {
+    sendToRole(recipient_role, { type: 'chat_message', message: row }, req.user.organization_id);
+  }
 
   res.json(row);
 });
@@ -366,33 +400,40 @@ router.put('/read-conversation', (req, res) => {
   const { user_id } = req.body;
   if (!user_id) return res.status(400).json({ error: 'user_id requis' });
   dbRun(
-    `UPDATE messages SET read = 1 WHERE sender_id = ? AND recipient_id = ? AND read = 0`,
-    [user_id, req.user.id]
+    `UPDATE messages SET read = 1
+     WHERE organization_id = ? AND sender_id = ? AND recipient_id = ? AND read = 0`,
+    [req.user.organization_id, user_id, req.user.id]
   );
   dbRun(
-    `UPDATE messages SET read = 1 WHERE sender_id = ? AND recipient_role = ? AND recipient_id IS NULL AND read = 0`,
-    [user_id, req.user.role]
+    `UPDATE messages SET read = 1
+     WHERE organization_id = ? AND sender_id = ? AND recipient_role = ? AND recipient_id IS NULL AND read = 0`,
+    [req.user.organization_id, user_id, req.user.role]
   );
   res.json({ success: true });
 });
 
 router.put('/:id/read', (req, res) => {
-  dbRun('UPDATE messages SET read = 1 WHERE id = ? AND (recipient_id = ? OR recipient_role = ?)',
-    [req.params.id, req.user.id, req.user.role]);
+  dbRun(`UPDATE messages SET read = 1
+    WHERE id = ? AND organization_id = ? AND (recipient_id = ? OR recipient_role = ?)`,
+  [req.params.id, req.user.organization_id, req.user.id, req.user.role]);
   res.json({ success: true });
 });
 
 router.delete('/:id', (req, res) => {
-  const msg = dbQuery('SELECT * FROM messages WHERE id = ?', [req.params.id])[0];
+  const msg = dbQuery(
+    'SELECT * FROM messages WHERE id = ? AND organization_id = ?',
+    [req.params.id, req.user.organization_id],
+  )[0];
   if (!msg) return res.status(404).json({ error: 'Message introuvable' });
   if (req.user.role !== 'admin' && msg.sender_id !== req.user.id) return res.status(403).json({ error: 'Non autorisé' });
-  dbRun('DELETE FROM messages WHERE id = ?', [req.params.id]);
+  dbRun('DELETE FROM messages WHERE id = ? AND organization_id = ?', [req.params.id, req.user.organization_id]);
   if (msg.doc_type === 'PDF') {
-    const filePath = pdfPath(msg.doc_id);
-    try { if (filePath && existsSync(filePath)) unlinkSync(filePath); } catch {}
+    try { deleteMessagePdf(msg.doc_id); } catch {}
   }
   if (msg.recipient_id) sendToUser(msg.recipient_id, { type: 'chat_message_deleted', id: msg.id });
-  if (msg.recipient_role) sendToRole(msg.recipient_role, { type: 'chat_message_deleted', id: msg.id });
+  if (msg.recipient_role) {
+    sendToRole(msg.recipient_role, { type: 'chat_message_deleted', id: msg.id }, req.user.organization_id);
+  }
   res.json({ success: true });
 });
 

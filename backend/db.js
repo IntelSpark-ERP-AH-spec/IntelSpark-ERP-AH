@@ -10,6 +10,7 @@ import { createPostgresAdapter } from './postgres-compat.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const DB_PATH = path.resolve(process.env.DB_PATH || path.join(__dirname, '..', 'data', 'intelsheets.db'));
+const DATABASE_URL = String(process.env.DATABASE_URL || '').trim();
 
 let db = null;
 
@@ -20,8 +21,8 @@ export function getDB() {
 
 export function initDB() {
   if (db) return db;
-  if (process.env.DATABASE_URL) {
-    db = createPostgresAdapter(process.env.DATABASE_URL);
+  if (DATABASE_URL) {
+    db = createPostgresAdapter(DATABASE_URL);
     db.prepare('SELECT 1 AS ok').get();
     console.log('Base PostgreSQL Supabase connectee');
   } else {
@@ -524,6 +525,7 @@ export function initDB() {
 
   db.exec(`CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
+    organization_id TEXT NOT NULL DEFAULT 'org_default',
     sender_id TEXT NOT NULL,
     recipient_id TEXT,
     recipient_role TEXT,

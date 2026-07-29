@@ -80,6 +80,7 @@ backups/*.db
 backups/*.db-journal
 certs/
 backend/uploads/message-pdfs/
+uploads/
 
 # Codex attachments
 .codex-remote-attachments/

@@ -69,6 +69,21 @@ test('websocket requires authentication and limits traffic', () => {
   assert.doesNotMatch(client, /ws\.onopen = \(\) => \{\s*setConnected\(true\)/);
 });
 
+test('message deletion, Redis, and Docker remain production-safe', () => {
+  const messages = source('backend/routes/messages.js');
+  const realtime = source('backend/realtime-bus.js');
+  const dockerignore = source('.dockerignore');
+  assert.match(messages, /permanentlyDeletedRows/);
+  assert.match(messages, /INSERT INTO message_deletions/);
+  assert.match(messages, /req\.user\.role === 'admin'/);
+  assert.match(realtime, /retries >= 12/);
+  assert.match(realtime, /REDIS_RECONNECT_LIMIT/);
+  assert.doesNotMatch(realtime, /error\.message/);
+  assert.match(dockerignore, /backend\/uploads/);
+  assert.match(dockerignore, /private/);
+  assert.match(dockerignore, /secrets/);
+});
+
 test('session revocation and strong resets remain enforced', () => {
   const auth = source('backend/auth.js');
   const users = source('backend/routes/users.js');
@@ -85,24 +100,29 @@ test('session revocation and strong resets remain enforced', () => {
 
 test('smtp passwords never return through profile endpoint', () => {
   const authRoutes = source('backend/routes/auth.js');
+  const emailAccounts = source('backend/email-account-service.js');
   const mailSync = source('backend/mail-sync-service.js');
   const mailRoutes = source('backend/routes/mail.js');
   const mailUi = source('frontend/src/components/CommunicationDrawer.jsx');
   const migrations = source('backend/migrations/index.js');
   assert.match(authRoutes, /smtp_configured/);
-  assert.match(authRoutes, /encryptSecret/);
-  assert.match(authRoutes, /smtp_user: user\?\.smtp_user \|\| ''/);
+  assert.match(emailAccounts, /encryptSecret/);
+  assert.match(emailAccounts, /encrypted_app_password/);
+  assert.match(authRoutes, /smtp_user: account\?\.email_address \|\| ''/);
   assert.doesNotMatch(authRoutes, /res\.json\(\{[^\n]*smtp_pass\s*:/);
-  assert.match(authRoutes, /mailboxBoundary/);
+  assert.doesNotMatch(authRoutes, /encrypted_app_password\s*:/);
+  assert.match(emailAccounts, /testEmailCredentials/);
   assert.match(mailSync, /mail_last_uid/);
   assert.match(mailSync, /receivedAt\.getTime\(\) < connectedAt/);
   assert.match(mailSync, /createEmailNotification/);
   assert.match(mailSync, /sendToUser\(userId, \{ type: 'notification'/);
-  assert.match(mailRoutes, /sender_name, sender_email, account_email, is_read/);
+  assert.match(mailRoutes, /organization_id,email_account_id,sender_user_id/);
+  assert.match(mailRoutes, /resolveAuthorizedEmailAccount/);
   assert.match(mailRoutes, /:id\/read/);
   assert.match(mailUi, /cd-mail-detail/);
   assert.match(mailUi, /Expéditeur inconnu/);
   assert.match(migrations, /20260716_010_gmail_inbox/);
+  assert.match(migrations, /20260729_016_gmail_multi_accounts/);
   assert.match(migrations, /LEGACY_MIGRATION_CHECKSUMS/);
   assert.match(migrations, /acceptedLegacyChecksums\?\.has\(appliedChecksum\)/);
 });
@@ -240,7 +260,8 @@ test('settings hide technical system page and enforce global typography', () => 
   assert.doesNotMatch(settings, />Sauvegarder[^<]*</);
   assert.doesNotMatch(settings, /saveGeneral|saveLocal|saveSmtp/);
   assert.match(settings, /Synchronisation automatique active/);
-  assert.match(settings, /lastSavedSmtpRef/);
+  assert.match(settings, /EmailAccountSettings/);
+  assert.doesNotMatch(settings, /lastSavedSmtpRef|mise à jour automatiquement/);
   assert.doesNotMatch(settings, /Diaporama automatique|APP_THEMES/);
   assert.doesNotMatch(app, /SLIDESHOW_THEMES|slideshowIndex|slideshow-global/);
   assert.match(app, /data-theme-mode=\{activeTheme\}/);

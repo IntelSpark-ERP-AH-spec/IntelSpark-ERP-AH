@@ -1254,6 +1254,30 @@ html, body, #root {
 .settings-session-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: auto; padding-top: 22px; }
 .settings-session-actions button { min-height: 41px; padding: 0 16px; border: 0; border-radius: var(--hz-r-sm); color: #fff; background: var(--hz-accent); font-size: 10px; font-weight: 750; cursor: pointer; }
 .settings-session-actions button.is-danger { color: #b42318; border: 1px solid #fecdca; background: #fef3f2; }
+.email-account-settings { display: grid; gap: 18px; padding-top: 22px; }
+.email-account-card { padding: 18px; border: 1px solid var(--hz-border); border-radius: var(--hz-r-md); background: var(--hz-surface-2); }
+.email-account-card > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.email-account-card > header > div { display: grid; gap: 4px; }
+.email-account-card > header strong { color: var(--hz-text); font-size: 13px; }
+.email-account-card > header small { color: var(--hz-text-tertiary); font-size: 9px; }
+.email-account-card button { min-height: 34px; padding: 0 12px; border: 1px solid var(--hz-border); border-radius: var(--hz-r-sm); color: var(--hz-text); background: var(--hz-surface); font-size: 9px; font-weight: 750; cursor: pointer; }
+.email-account-card button.is-danger { color: #b42318; border-color: #fecdca; background: #fef3f2; }
+.email-account-card button:disabled { cursor: not-allowed; opacity: .55; }
+.email-account-options { display: flex; flex-wrap: wrap; gap: 14px; padding: 4px 0 8px; }
+.email-account-options label { display: inline-flex; align-items: center; gap: 6px; color: var(--hz-text-secondary); font-size: 9px; font-weight: 700; }
+.email-account-list { display: grid; gap: 7px; margin-top: 16px; }
+.email-account-list article { display: grid; grid-template-columns: minmax(0,1fr) auto auto auto; align-items: center; gap: 7px; padding: 9px; border: 1px solid var(--hz-border); border-radius: var(--hz-r-sm); background: var(--hz-surface); }
+.email-account-list article > span { display: grid; min-width: 0; gap: 2px; }
+.email-account-list article strong { overflow: hidden; color: var(--hz-text); font-size: 10px; text-overflow: ellipsis; }
+.email-account-list article small { color: var(--hz-text-tertiary); font-size: 8px; }
+.email-permission-grid { display: grid; gap: 7px; margin-top: 16px; padding: 12px; border: 1px solid var(--hz-border); border-radius: var(--hz-r-sm); background: var(--hz-surface); }
+.email-permission-grid > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 7px; border-bottom: 1px solid var(--hz-border); }
+.email-permission-grid > header strong { color: var(--hz-text); font-size: 10px; }
+.email-permission-grid > header small { color: var(--hz-text-tertiary); font-size: 8px; }
+.email-permission-grid > div { display: grid; grid-template-columns: minmax(130px,1fr) auto auto minmax(280px,2fr); align-items: center; gap: 10px; }
+.email-permission-grid > div > strong { color: var(--hz-text-secondary); font-size: 9px; }
+.email-permission-grid label { display: inline-flex; align-items: center; gap: 4px; color: var(--hz-text-secondary); font-size: 8px; white-space: nowrap; }
+.email-permission-grid > div > span { display: flex; flex-wrap: wrap; gap: 5px 9px; }
 .settings-account-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 22px 0; }
 .settings-account-grid input { font-family: var(--hz-mono); letter-spacing: .06em; }
 .settings-email-guide { display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr; align-items: center; gap: 10px; margin-top: 22px; padding: 17px; border: 1px solid var(--hz-border); border-radius: var(--hz-r-md); background: var(--hz-surface-2); }
@@ -1265,6 +1289,8 @@ html, body, #root {
 .settings-notice-error { border-color: #fecdca; color: #b42318; background: #fef3f2; }
 @media (max-width: 1000px) { .settings-workspace { grid-template-columns: 210px minmax(0, 1fr); } .settings-content { padding: 24px; } .settings-form-grid, .settings-account-grid { grid-template-columns: 1fr 1fr; } .settings-email-guide { grid-template-columns: auto 1fr; } }
 @media (max-width: 720px) { .settings-hero { align-items: flex-start; flex-direction: column; padding: 22px; } .settings-workspace { display: block; } .settings-nav { display: grid; grid-template-columns: 1fr 1fr; border-right: 0; border-bottom: 1px solid var(--hz-border); } .settings-nav > header, .settings-nav > footer { grid-column: 1 / -1; } .settings-content { padding: 21px; } .settings-form-grid, .settings-form-grid-email, .settings-account-grid, .settings-choice { grid-template-columns: 1fr; } .settings-section > footer { align-items: stretch; flex-direction: column; } }
+@media (max-width: 900px) { .email-permission-grid > div { grid-template-columns: 1fr auto auto; } .email-permission-grid > div > span { grid-column: 1 / -1; } }
+@media (max-width: 620px) { .email-account-list article { grid-template-columns: 1fr 1fr; } .email-account-list article > span { grid-column: 1 / -1; } }
 @media (max-width: 470px) { .settings-nav { grid-template-columns: 1fr; } .settings-nav > header, .settings-nav > footer { grid-column: 1; } }
 
 /* Executive reporting shared by finance, sales and administration. */

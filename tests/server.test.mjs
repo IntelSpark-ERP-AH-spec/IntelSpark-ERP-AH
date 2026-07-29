@@ -239,9 +239,9 @@ test('production server supports one hundred authenticated users', { timeout: 60
     mailProbe.prepare(`UPDATE users SET smtp_user = ?, mail_connected_at = datetime('now') WHERE id = ?`)
       .run('admin@gmail.com', session.user.id);
     mailProbe.prepare(`INSERT INTO email_history
-      (id, user_id, direction, correspondent, subject, body, sender_name, sender_email, account_email, is_read)
-      VALUES (?, ?, 'received', ?, ?, ?, ?, ?, ?, 0)`)
-      .run(mailId, session.user.id, 'expediteur@gmail.com', 'Sujet integration', 'Contenu complet integration',
+      (id, user_id, organization_id, direction, correspondent, subject, body, sender_name, sender_email, account_email, is_read)
+      VALUES (?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, 0)`)
+      .run(mailId, session.user.id, session.user.organization_id, 'expediteur@gmail.com', 'Sujet integration', 'Contenu complet integration',
         'Expediteur Test', 'expediteur@gmail.com', 'admin@gmail.com');
     mailProbe.close();
 
@@ -413,6 +413,12 @@ test('production server supports one hundred authenticated users', { timeout: 60
       { id: randomUUID(), username: 'supervised_session_target', role: 'employe' },
     ];
     const sharedAdminUser = { id: randomUUID(), username: 'shared_admin', role: 'admin' };
+    const externalOrganizationUser = {
+      id: randomUUID(),
+      username: 'external_organization_user',
+      role: 'commercial',
+      organization_id: 'org_external_test',
+    };
     const database = new Database(databasePath);
     database.pragma('busy_timeout = 10000');
     const insertUser = database.prepare(
@@ -422,6 +428,19 @@ test('production server supports one hundred authenticated users', { timeout: 60
       for (const user of [...capacityUsers, ...stockRoleUsers, sharedAdminUser]) {
         insertUser.run(user.id, user.username, 'integration-password-unused', user.role, 'operations', user.username);
       }
+      database.prepare('INSERT OR IGNORE INTO organizations(id,name,realtime_topic) VALUES (?,?,?)')
+        .run(externalOrganizationUser.organization_id, 'Organisation externe test', 'org-external-test');
+      database.prepare(`INSERT INTO users
+        (id,username,password,role,department,full_name,active,token_version,organization_id)
+        VALUES (?,?,?,?,?,?,1,0,?)`).run(
+        externalOrganizationUser.id,
+        externalOrganizationUser.username,
+        'integration-password-unused',
+        externalOrganizationUser.role,
+        'operations',
+        externalOrganizationUser.username,
+        externalOrganizationUser.organization_id,
+      );
       const productId = randomUUID();
       database.prepare(`INSERT INTO produits
         (id, reference, designation, categorie, prix_ht, prix_vente, stock_min, actif)
@@ -450,6 +469,7 @@ test('production server supports one hundred authenticated users', { timeout: 60
     const capacityTokens = capacityUsers.map(signUserToken);
     const [commercialToken, magasinierToken, accountantToken, supervisedTargetToken] = stockRoleUsers.map(signUserToken);
     const sharedAdminToken = signUserToken(sharedAdminUser);
+    const externalOrganizationToken = signUserToken(externalOrganizationUser);
 
     const sharedLogoUrl = 'https://hozhnlzgbccrkdluqjcg.supabase.co/storage/v1/object/public/company-assets/org_default/company-logo.png?v=1';
     const sharedBrandUrl = 'https://hozhnlzgbccrkdluqjcg.supabase.co/storage/v1/object/public/company-assets/org_default/brands/shared-brand.png';
@@ -649,6 +669,17 @@ test('production server supports one hundred authenticated users', { timeout: 60
     assert.equal(pdfMessage.document.name, 'facture intégration.pdf');
     assert.equal(pdfMessage.document.size, pdfBytes.length);
 
+    const externalConversation = await fetch(
+      `${baseUrl}/api/messages?with_user=${encodeURIComponent(stockRoleUsers[1].id)}`,
+      { headers: { authorization: `Bearer ${externalOrganizationToken}`, origin: 'https://erp.test' } },
+    );
+    assert.equal(externalConversation.status, 200, output);
+    assert.deepEqual(await externalConversation.json(), []);
+    const externalPdfDownload = await fetch(`${baseUrl}/api/messages/${pdfMessage.id}/pdf`, {
+      headers: { authorization: `Bearer ${externalOrganizationToken}`, origin: 'https://erp.test' },
+    });
+    assert.equal(externalPdfDownload.status, 404, output);
+
     const pdfDownload = await fetch(`${baseUrl}/api/messages/${pdfMessage.id}/pdf`, {
       headers: { authorization: `Bearer ${commercialToken}`, origin: 'https://erp.test' },
     });
@@ -680,7 +711,9 @@ test('production server supports one hundred authenticated users', { timeout: 60
     });
     assert.equal(hideSelectedMessage.status, 200, output);
     const deletionResult = await hideSelectedMessage.json();
-    assert.equal(deletionResult.permanent, true);
+    assert.equal(deletionResult.permanent, false);
+    assert.equal(deletionResult.permanently_deleted, 0);
+    assert.equal(deletionResult.hidden, 2);
     assert.deepEqual(new Set(deletionResult.ids), new Set([pdfMessage.id, directMessage.id]));
 
     const commercialInboxAfterDelete = await fetch(`${baseUrl}/api/messages`, {
@@ -699,12 +732,16 @@ test('production server supports one hundred authenticated users', { timeout: 60
     const senderInboxAfterRecipientDelete = await fetch(`${baseUrl}/api/messages?with_role=commercial`, {
       headers: { authorization: `Bearer ${magasinierToken}`, origin: 'https://erp.test' },
     });
-    assert.equal((await senderInboxAfterRecipientDelete.json()).some(message => message.id === pdfMessage.id), false);
+    assert.equal((await senderInboxAfterRecipientDelete.json()).some(message => message.id === pdfMessage.id), true);
 
     const deletedPdfDownload = await fetch(`${baseUrl}/api/messages/${pdfMessage.id}/pdf`, {
       headers: { authorization: `Bearer ${commercialToken}`, origin: 'https://erp.test' },
     });
     assert.equal(deletedPdfDownload.status, 404, output);
+    const senderPdfDownload = await fetch(`${baseUrl}/api/messages/${pdfMessage.id}/pdf`, {
+      headers: { authorization: `Bearer ${magasinierToken}`, origin: 'https://erp.test' },
+    });
+    assert.equal(senderPdfDownload.status, 200, output);
 
     const incomingDocumentResponse = await fetch(`${baseUrl}/api/messages`, {
       method: 'POST',

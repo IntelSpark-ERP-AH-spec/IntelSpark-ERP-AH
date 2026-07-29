@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api';
 import { systemConfirm } from '../SystemConfirm';
 import { useAuth } from '../AuthContext';
 import { useLanguage } from '../LanguageContext';
 import { useCurrency } from '../CurrencyContext';
 import { useUserDoc } from '../useUserDoc';
 import { useT } from '../appI18n';
+import EmailAccountSettings from '../components/EmailAccountSettings';
 
 const LS_KEYS = { visual: 'hz_settings_visual', fiscal: 'hz_settings_fiscal', comptable: 'hz_settings_comptable' };
 const DEFAULT_VISUAL = { fontSize: 14, fontFamily: 'Inter', textColor: '#111827' };
@@ -40,20 +40,12 @@ export default function Settings() {
   const preferences = useUserDoc('user_preferences', null);
   const organizationAccounting = useUserDoc('organization_accounting_settings', null);
   const hydratedRef = useRef(false);
-  const lastSavedSmtpRef = useRef('');
   const [activeSection, setActiveSection] = useState('general');
   const [theme, setTheme] = useState('light');
   const [visual, setVisual] = useState(() => load(LS_KEYS.visual, DEFAULT_VISUAL));
   const [fiscal, setFiscal] = useState(() => load(LS_KEYS.fiscal, DEFAULT_FISCAL));
   const [accounts, setAccounts] = useState(() => load(LS_KEYS.comptable, DEFAULT_COMPTABLE));
   const [notice, setNotice] = useState(null);
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPass, setSmtpPass] = useState('');
-  const [smtpConfigured, setSmtpConfigured] = useState(false);
-  const [smtpLoading, setSmtpLoading] = useState(true);
-  const [mailConnectedAt, setMailConnectedAt] = useState(null);
-  const [mailLastSyncAt, setMailLastSyncAt] = useState(null);
-  const [saving, setSaving] = useState(false);
   const canManageAccounting = ['admin', 'comptable'].includes(user?.role);
   const sections = SECTIONS.filter(([, , , , roles]) => !roles || roles.includes(user?.role));
 
@@ -71,48 +63,6 @@ export default function Settings() {
     if (organizationAccounting.data.fiscal) setFiscal(current => ({ ...current, ...organizationAccounting.data.fiscal }));
     if (organizationAccounting.data.accounts) setAccounts(current => ({ ...current, ...organizationAccounting.data.accounts }));
   }, [organizationAccounting.loaded, organizationAccounting.data]);
-
-  useEffect(() => {
-    api.getMySmtp().then(data => {
-      const loadedUser = data.smtp_user || '';
-      setSmtpUser(loadedUser);
-      setSmtpPass('');
-      setSmtpConfigured(Boolean(data.smtp_configured));
-      setMailConnectedAt(data.mail_connected_at || null);
-      setMailLastSyncAt(data.mail_last_sync_at || null);
-      lastSavedSmtpRef.current = `${loadedUser.trim().toLowerCase()}|`;
-    }).catch(() => {}).finally(() => setSmtpLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (smtpLoading) return undefined;
-    const normalizedEmail = smtpUser.trim().toLowerCase();
-    const normalizedPassword = smtpPass.replace(/\s+/g, '');
-    const signature = `${normalizedEmail}|${normalizedPassword}`;
-    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
-    if (!validEmail || (!smtpConfigured && normalizedPassword.length !== 16)) return undefined;
-    if (normalizedPassword && normalizedPassword.length !== 16) return undefined;
-    if (signature === lastSavedSmtpRef.current) return undefined;
-
-    const timer = window.setTimeout(async () => {
-      setSaving(true);
-      try {
-        const saved = await api.saveMySmtp({ smtp_user: normalizedEmail, smtp_pass: normalizedPassword });
-        lastSavedSmtpRef.current = `${normalizedEmail}|`;
-        setSmtpConfigured(true);
-        if (saved.mail_connected_at) setMailConnectedAt(saved.mail_connected_at);
-        setSmtpPass('');
-        setNotice({ message: 'Messagerie mise à jour automatiquement', type: 'success' });
-        window.setTimeout(() => setNotice(null), 2600);
-      } catch (error) {
-        setNotice({ message: error.message || 'Enregistrement impossible', type: 'error' });
-      } finally {
-        setSaving(false);
-      }
-    }, 900);
-
-    return () => window.clearTimeout(timer);
-  }, [smtpUser, smtpPass, smtpConfigured, smtpLoading]);
 
   useEffect(() => {
     document.documentElement.style.fontSize = `${visual.fontSize}px`;
@@ -223,10 +173,14 @@ export default function Settings() {
 
           {activeSection === 'email' && (
             <div className="settings-section">
-              <header><div><span>Communication</span><h2>Messagerie SMTP</h2><p>Envoyez, recevez et lisez courriers depuis application.</p></div><b>EM</b></header>
-              <div className="settings-email-guide"><b>01</b><span><strong>Renseignez serveur SMTP</strong><small>Utilisez votre fournisseur mail.</small></span><b>02</b><span><strong>Créez identifiants dédiés</strong><small>Évitez le compte personnel principal.</small></span><b>03</b><span><strong>Copiez code ci-dessous</strong><small>Sécurisez l’accès courrier.</small></span></div>
-              <div className="settings-form-grid settings-form-grid-email"><label><span>Adresse email</span><input type="email" required disabled={smtpLoading} value={smtpUser} onChange={event => setSmtpUser(event.target.value)} placeholder="nom@domaine.com" /><small>Adresse expéditrice officielle.</small></label><label><span>Mot de passe / token</span><input type="password" required={!smtpConfigured} disabled={smtpLoading} value={smtpPass} onChange={event => setSmtpPass(event.target.value)} placeholder={smtpConfigured ? 'Laisser vide pour conserver' : '•••• •••• •••• ••••'} /><small>{smtpConfigured ? 'Secret chiffré déjà enregistré.' : 'Jamais le mot de passe principal si possible.'}</small></label></div>
-              <footer><span>{smtpLoading ? 'Chargement…' : saving ? 'Connexion messagerie en cours…' : smtpConfigured ? `Messagerie active depuis ${mailConnectedAt ? new Date(mailConnectedAt).toLocaleString('fr-FR') : 'connexion actuelle'}. ${mailLastSyncAt ? `Dernière lecture ${new Date(mailLastSyncAt).toLocaleString('fr-FR')}.` : 'Première lecture en attente.'}` : 'Saisissez adresse et secret de messagerie.'}</span></footer>
+              <header><div><span>Communication</span><h2>Comptes Gmail</h2><p>Gmail personnel, comptes entreprise, permissions.</p></div><b>EM</b></header>
+              <EmailAccountSettings
+                user={user}
+                onNotice={(nextNotice) => {
+                  setNotice(nextNotice);
+                  window.setTimeout(() => setNotice(null), 3200);
+                }}
+              />
             </div>
           )}
         </main>

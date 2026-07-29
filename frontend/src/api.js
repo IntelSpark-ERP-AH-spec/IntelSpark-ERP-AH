@@ -130,6 +130,8 @@ export const api = {
   logout: () => request('/auth/logout', { method: 'POST' }),
   getMySmtp: () => request('/auth/me/smtp'),
   saveMySmtp: (data) => request('/auth/me/smtp', { method: 'PUT', body: JSON.stringify(data) }),
+  testMySmtp: (data) => request('/auth/me/smtp/test', { method: 'POST', body: JSON.stringify(data) }),
+  clearMySmtp: () => request('/auth/me/smtp', { method: 'PUT', body: JSON.stringify({ clear: true }) }),
 
   // Stock
   getProduits: (params = '') => request(`/stock${params}`),
@@ -295,6 +297,18 @@ export const api = {
 
   // Mail
   sendEmail: (data) => request('/mail/send', { method: 'POST', body: JSON.stringify(data) }),
+  getEmailAccounts: () => request('/mail/accounts'),
+  getPersonalEmailAccount: () => request('/mail/accounts/personal'),
+  savePersonalEmailAccount: (data) => request('/mail/accounts/personal', { method: 'PUT', body: JSON.stringify(data) }),
+  testPersonalEmailAccount: (data = {}) => request('/mail/accounts/personal/test', { method: 'POST', body: JSON.stringify(data) }),
+  deletePersonalEmailAccount: () => request('/mail/accounts/personal', { method: 'DELETE' }),
+  setDefaultEmailAccount: (accountId) => request('/mail/accounts/default', { method: 'PUT', body: JSON.stringify({ account_id: accountId }) }),
+  getOrganizationEmailAccounts: () => request('/mail/accounts/organization'),
+  createOrganizationEmailAccount: (data) => request('/mail/accounts/organization', { method: 'POST', body: JSON.stringify(data) }),
+  updateOrganizationEmailAccount: (id, data) => request(`/mail/accounts/organization/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  testOrganizationEmailAccount: (id, data = {}) => request(`/mail/accounts/organization/${id}/test`, { method: 'POST', body: JSON.stringify(data) }),
+  updateOrganizationEmailPermissions: (id, permissions) => request(`/mail/accounts/organization/${id}/permissions`, { method: 'PUT', body: JSON.stringify({ permissions }) }),
+  deleteOrganizationEmailAccount: (id) => request(`/mail/accounts/organization/${id}`, { method: 'DELETE' }),
   getMailUsers: () => request('/mail/users'),
   getMailHistory: () => request('/mail/history'),
   syncMail: () => request('/mail/sync', { method: 'POST' }),

@@ -96,6 +96,8 @@ export default function CommunicationDrawer({ isOpen, onToggle, onClose, user, s
   const [mailView, setMailView] = useState('compose');
   const [selectedMail, setSelectedMail] = useState(null);
   const [smtpConfigured, setSmtpConfigured] = useState(null);
+  const [emailAccounts, setEmailAccounts] = useState([]);
+  const [selectedEmailAccountId, setSelectedEmailAccountId] = useState('');
   const [mailSyncing, setMailSyncing] = useState(false);
   const [mailDeleting, setMailDeleting] = useState(false);
   const [mailDeleteError, setMailDeleteError] = useState('');
@@ -144,21 +146,43 @@ export default function CommunicationDrawer({ isOpen, onToggle, onClose, user, s
     setMailSyncing(false);
   }, []);
 
-  useEffect(() => { if (isOpen && tab === 'mail') { api.getMailUsers().then(setMailUsers).catch(() => {}); api.getMailHistory().then(setMailHistory).catch(() => {}); api.getMySmtp().then(d => { const ok = Boolean(d.smtp_configured); setSmtpConfigured(ok); if (ok) syncMail(); }).catch(() => setSmtpConfigured(false)); } }, [isOpen, tab, syncMail]);
+  useEffect(() => {
+    if (!isOpen || tab !== 'mail') return;
+    api.getMailUsers().then(setMailUsers).catch(() => {});
+    api.getMailHistory().then(setMailHistory).catch(() => {});
+    api.getEmailAccounts().then(accounts => {
+      const usable = accounts.filter(account => account.can_send);
+      setEmailAccounts(usable);
+      setSmtpConfigured(usable.length > 0);
+      setSelectedEmailAccountId(current => {
+        if (usable.some(account => account.id === current)) return current;
+        return (usable.find(account => account.selected_by_default) || usable[0])?.id || '';
+      });
+      if (accounts.some(account => account.can_read)) syncMail();
+    }).catch(() => {
+      setEmailAccounts([]);
+      setSmtpConfigured(false);
+    });
+  }, [isOpen, tab, syncMail]);
 
   const sendEmail = useCallback(async () => {
     if (!emailTo.trim() || emailSending) return;
     setEmailSending(true);
     setEmailStatus('');
     try {
-      await api.sendEmail({ to: emailTo.trim(), subject: emailSubject.trim(), body: emailBody.trim() });
+      await api.sendEmail({
+        account_id: selectedEmailAccountId || undefined,
+        to: emailTo.trim(),
+        subject: emailSubject.trim(),
+        body: emailBody.trim(),
+      });
       setEmailStatus('ok');
       api.getMailHistory().then(setMailHistory).catch(() => {});
     } catch (e) {
       setEmailStatus(e.message || 'Erreur');
     }
     setEmailSending(false);
-  }, [emailTo, emailSubject, emailBody, emailSending]);
+  }, [emailTo, emailSubject, emailBody, emailSending, selectedEmailAccountId]);
 
   const openMail = useCallback((mail) => {
     if (mailListRef.current) mailScrollPos.current = mailListRef.current.scrollTop;
@@ -723,13 +747,25 @@ export default function CommunicationDrawer({ isOpen, onToggle, onClose, user, s
               {mailView === 'compose' && <>
               {smtpConfigured === false && (
                 <div style={{ padding: '10px 12px', borderRadius: 8, background: '#fef3c7', border: '1px solid #fbbf24', fontSize: 12, color: '#92400e', marginBottom: 8, lineHeight: 1.5 }}>
-                  ⚠️ Vous devez configurer votre Gmail personnel dans <strong>Réglages {'>'} Configuration Email</strong> avant d'envoyer des emails.
+                  Aucun compte Gmail autorisé. Configurez-le dans <strong>Réglages {'>'} Messagerie</strong>.
                 </div>
               )}
               {smtpConfigured === true && (
                 <div style={{ padding: '6px 12px', borderRadius: 8, background: '#d1fae5', border: '1px solid #34d399', fontSize: 11, color: '#065f46', marginBottom: 8 }}>
-                  ✓ Votre Gmail est configuré
+                  Compte Gmail disponible
                 </div>
+              )}
+              {emailAccounts.length > 0 && (
+                <label style={{ display: 'grid', gap: 4, color: '#64748b', fontSize: 11 }}>
+                  Envoyer depuis
+                  <select value={selectedEmailAccountId} onChange={event => setSelectedEmailAccountId(event.target.value)}>
+                    {emailAccounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_type === 'personal' ? 'Mon Gmail personnel' : account.sender_name || account.email_address} — {account.email_address}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
               {mailUsers.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -744,7 +780,7 @@ export default function CommunicationDrawer({ isOpen, onToggle, onClose, user, s
               <textarea placeholder="Corps du message..." value={emailBody} onChange={e => setEmailBody(e.target.value)} />
               {emailStatus === 'ok' && <div style={{ color: '#00a884', fontSize: 12, fontWeight: 600 }}>Envoyé avec succès!</div>}
               {emailStatus && emailStatus !== 'ok' && <div style={{ color: '#ef4444', fontSize: 12 }}>{emailStatus}</div>}
-              <button onClick={sendEmail} disabled={!emailTo.trim() || emailSending}>{emailSending ? 'Envoi...' : 'Envoyer'}</button>
+              <button onClick={sendEmail} disabled={!emailTo.trim() || !selectedEmailAccountId || emailSending}>{emailSending ? 'Envoi...' : 'Envoyer'}</button>
               </>}
             </div>
           )}

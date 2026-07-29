@@ -8,10 +8,17 @@ frontend/node_modules
 frontend/dist
 data
 backups
+uploads
+backend/uploads
+private
+secrets
 certs
 .env
 .env.*
 *.log
+*.pdf
+*.pem
+*.key
 server_log.txt
 tests
 code-review-graph

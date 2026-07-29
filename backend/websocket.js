@@ -66,10 +66,12 @@ function removeClientSocket(userId, ws) {
   if (clients.get(userId).size === 0) clients.delete(userId);
 }
 
-function localBroadcast(message, excludeUserId = null) {
+function localBroadcast(message, excludeUserId = null, organizationId = null) {
   for (const [userId, sockets] of clients.entries()) {
     if (excludeUserId && String(userId) === String(excludeUserId)) continue;
-    for (const ws of sockets) sendJson(ws, message);
+    for (const ws of sockets) {
+      if (!organizationId || String(ws.organizationId) === String(organizationId)) sendJson(ws, message);
+    }
   }
 }
 
@@ -78,10 +80,12 @@ function localSendToUser(userId, message) {
   for (const ws of entry?.[1] || []) sendJson(ws, message);
 }
 
-function localSendToRole(role, message) {
+function localSendToRole(role, message, organizationId = null) {
   for (const sockets of clients.values()) {
     for (const ws of sockets) {
-      if (ws.role === role) sendJson(ws, message);
+      if (ws.role === role && (!organizationId || String(ws.organizationId) === String(organizationId))) {
+        sendJson(ws, message);
+      }
     }
   }
 }
@@ -106,9 +110,11 @@ function localDisconnectUser(userId, reason) {
 }
 
 function handleRemoteEvent(event) {
-  if (event.type === 'broadcast') localBroadcast(event.message, event.target?.excludeUserId);
+  if (event.type === 'broadcast') {
+    localBroadcast(event.message, event.target?.excludeUserId, event.target?.organizationId);
+  }
   if (event.type === 'user') localSendToUser(event.target?.userId, event.message);
-  if (event.type === 'role') localSendToRole(event.target?.role, event.message);
+  if (event.type === 'role') localSendToRole(event.target?.role, event.message, event.target?.organizationId);
   if (event.type === 'team_document') {
     localSendTeamDocument(event.target?.teamKey, event.target?.documentKey, event.message);
   }
@@ -174,6 +180,7 @@ export async function setupWebSocket(server) {
 
     let userId = null;
     let username = 'anon';
+    let organizationId = null;
     let authenticated = false;
     let rateWindowStarted = Date.now();
     let rateCount = 0;
@@ -216,7 +223,7 @@ export async function setupWebSocket(server) {
           const decoded = verifyToken(String(message.token || ''));
           if (isTokenBlacklisted(decoded.jti)) throw new Error('Token revoque');
           const currentUser = dbGet(
-            'SELECT id, username, role, department, active, token_version FROM users WHERE id = ?',
+            'SELECT id, username, role, department, organization_id, active, token_version FROM users WHERE id = ?',
             [decoded.id]
           );
           if (!currentUser?.active) throw new Error('Compte indisponible');
@@ -227,15 +234,17 @@ export async function setupWebSocket(server) {
           clearTimeout(authTimer);
           userId = currentUser.id;
           username = currentUser.username;
+          organizationId = currentUser.organization_id || 'org_default';
           ws.userId = userId;
           ws.username = username;
           ws.role = currentUser.role;
           ws.department = currentUser.department;
+          ws.organizationId = organizationId;
 
           if (!clients.has(userId)) clients.set(userId, new Set());
           clients.get(userId).add(ws);
           sendJson(ws, { type: 'auth_ok', userId, username, role: currentUser.role });
-          broadcast({ type: 'user_online', userId, username, role: currentUser.role }, userId);
+          broadcast({ type: 'user_online', userId, username, role: currentUser.role }, userId, organizationId);
         } catch {
           sendJson(ws, { type: 'error', message: 'Authentification refusee' });
           ws.close(1008, 'Authentification refusee');
@@ -311,7 +320,7 @@ export async function setupWebSocket(server) {
 
       const wasLastSocket = userId && clients.get(userId)?.size === 1;
       removeClientSocket(userId, ws);
-      if (wasLastSocket) broadcast({ type: 'user_offline', userId, username });
+      if (wasLastSocket) broadcast({ type: 'user_offline', userId, username }, null, organizationId);
     });
 
     ws.on('error', () => {});
@@ -337,9 +346,9 @@ export async function setupWebSocket(server) {
   return wss;
 }
 
-export function broadcast(message, excludeUserId = null) {
-  localBroadcast(message, excludeUserId);
-  publishRealtime('broadcast', { excludeUserId }, message).catch(() => {});
+export function broadcast(message, excludeUserId = null, organizationId = null) {
+  localBroadcast(message, excludeUserId, organizationId);
+  publishRealtime('broadcast', { excludeUserId, organizationId }, message).catch(() => {});
 }
 
 export function sendToUser(userId, message) {
@@ -353,16 +362,16 @@ export function disconnectUser(userId, reason = 'Compte desactive') {
   return disconnected;
 }
 
-export function sendToRole(role, message) {
-  localSendToRole(role, message);
-  publishRealtime('role', { role }, message).catch(() => {});
+export function sendToRole(role, message, organizationId = null) {
+  localSendToRole(role, message, organizationId);
+  publishRealtime('role', { role, organizationId }, message).catch(() => {});
 }
 
 export function getOnlineUsers() {
   const users = [];
   for (const [userId, sockets] of clients.entries()) {
     const ws = [...sockets][0];
-    if (ws) users.push({ userId, username: ws.username, role: ws.role });
+    if (ws) users.push({ userId, username: ws.username, role: ws.role, organization_id: ws.organizationId });
   }
   return users;
 }

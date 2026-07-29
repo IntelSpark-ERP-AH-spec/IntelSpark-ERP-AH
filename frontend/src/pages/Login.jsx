@@ -40,7 +40,7 @@ export default function LoginPage({ onSuccess }) {
           {busy ? 'Connexion...' : 'Se connecter'}
         </button>
         <div style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: '#94a3b8' }}>
-          Serveur local — {import.meta.env.VITE_API_URL || 'http://localhost:3001'}
+          Connexion sécurisée
         </div>
       </form>
     </div>

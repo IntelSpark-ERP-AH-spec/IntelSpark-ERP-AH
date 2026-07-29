@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbQuery, dbGet, dbRun, dbTransaction } from '../db.js';
 import { authMiddleware, roleMiddleware, VALID_ROLES, validatePassword } from '../auth.js';
 import { disconnectUser } from '../websocket.js';
+import { deleteMessagePdf } from '../message-pdf-storage.js';
 
 const router = Router();
 
@@ -12,7 +13,11 @@ router.use(authMiddleware);
 router.use(roleMiddleware('admin'));
 
 router.get('/', (req, res) => {
-  const users = dbQuery('SELECT id, username, role, department, full_name, email, active, created_at, last_login FROM users ORDER BY created_at');
+  const users = dbQuery(
+    `SELECT id, username, role, department, full_name, email, active, created_at, last_login, organization_id
+     FROM users WHERE organization_id = ? ORDER BY created_at`,
+    [req.user.organization_id],
+  );
   res.json(users);
 });
 
@@ -27,23 +32,27 @@ router.post('/', (req, res) => {
   const existing = dbGet('SELECT id FROM users WHERE lower(username) = ?', [normalizedUsername]);
   if (existing) return res.status(400).json({ error: 'Nom d\'utilisateur déjà pris' });
   const hash = bcrypt.hashSync(password, 12);
+  const organizationId = req.user.organization_id;
   const idColumn = dbGet("SELECT type FROM pragma_table_info('users') WHERE name='id'");
   const usesNumericId = /INT/i.test(String(idColumn?.type || ''));
   let id;
   if (usesNumericId) {
-    const result = dbRun('INSERT INTO users (username, password, role, department, full_name, email) VALUES (?,?,?,?,?,?)',
-      [normalizedUsername, hash, role || 'employe', department || null, full_name || null, email || null]);
+    const result = dbRun('INSERT INTO users (username, password, role, department, full_name, email, organization_id) VALUES (?,?,?,?,?,?,?)',
+      [normalizedUsername, hash, role || 'employe', department || null, full_name || null, email || null, organizationId]);
     id = Number(result.lastInsertRowid);
   } else {
     id = uuidv4();
-    dbRun('INSERT INTO users (id, username, password, role, department, full_name, email) VALUES (?,?,?,?,?,?,?)',
-      [id, normalizedUsername, hash, role || 'employe', department || null, full_name || null, email || null]);
+    dbRun('INSERT INTO users (id, username, password, role, department, full_name, email, organization_id) VALUES (?,?,?,?,?,?,?,?)',
+      [id, normalizedUsername, hash, role || 'employe', department || null, full_name || null, email || null, organizationId]);
   }
-  res.status(201).json({ id, username: normalizedUsername, role: role || 'employe', department, full_name, email });
+  res.status(201).json({ id, username: normalizedUsername, role: role || 'employe', department, full_name, email, organization_id: organizationId });
 });
 
 router.put('/:id', (req, res) => {
-  const existing = dbGet('SELECT id, username, role, department, full_name, email, active FROM users WHERE id = ?', [req.params.id]);
+  const existing = dbGet(
+    'SELECT id, username, role, department, full_name, email, active FROM users WHERE id = ? AND organization_id = ?',
+    [req.params.id, req.user.organization_id],
+  );
   if (!existing) return res.status(404).json({ error: 'Utilisateur introuvable' });
   const { role, department, full_name, email, active } = req.body;
   const nextRole = role ?? existing.role;
@@ -54,33 +63,47 @@ router.put('/:id', (req, res) => {
   }
   const revokeSessions = nextRole !== existing.role || nextActive !== existing.active;
   dbRun(`UPDATE users SET role=?, department=?, full_name=?, email=?, active=?,
-      token_version=token_version + ? WHERE id=?`,
-    [nextRole, department ?? existing.department, full_name ?? existing.full_name, email ?? existing.email, nextActive, revokeSessions ? 1 : 0, req.params.id]);
+      token_version=token_version + ? WHERE id=? AND organization_id=?`,
+    [nextRole, department ?? existing.department, full_name ?? existing.full_name, email ?? existing.email, nextActive, revokeSessions ? 1 : 0, req.params.id, req.user.organization_id]);
   if (revokeSessions) disconnectUser(existing.id, 'Droits utilisateur modifiés');
   res.json({ success: true });
 });
 
 router.delete('/:id', (req, res) => {
-  const target = dbGet('SELECT id, username, role FROM users WHERE id = ?', [req.params.id]);
+  const target = dbGet(
+    'SELECT id, username, role FROM users WHERE id = ? AND organization_id = ?',
+    [req.params.id, req.user.organization_id],
+  );
   if (!target) return res.status(404).json({ error: 'Utilisateur introuvable' });
   if (String(target.id) === String(req.user.id)) {
     return res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte' });
   }
   if (target.role === 'admin') {
-    const adminCount = dbGet("SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND active = 1")?.total || 0;
+    const adminCount = dbGet(
+      "SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND active = 1 AND organization_id = ?",
+      [req.user.organization_id],
+    )?.total || 0;
     if (adminCount <= 1) return res.status(400).json({ error: 'Impossible de supprimer le dernier administrateur actif' });
   }
 
   try {
     // Remove dependent rows first: older databases do not define ON DELETE CASCADE
     // for these tables, which otherwise raises SQLITE_CONSTRAINT_FOREIGNKEY.
+    const pdfRows = dbQuery(
+      `SELECT doc_id FROM messages
+       WHERE (sender_id = ? OR recipient_id = ?) AND doc_type = 'PDF' AND doc_id IS NOT NULL`,
+      [target.id, target.id],
+    );
     const result = dbTransaction(() => {
       dbRun('DELETE FROM notifications WHERE user_id = ?', [target.id]);
       dbRun('DELETE FROM messages WHERE sender_id = ? OR recipient_id = ?', [target.id, target.id]);
       dbRun('DELETE FROM user_data WHERE user_id = ?', [target.id]);
-      return dbRun('DELETE FROM users WHERE id = ?', [target.id]);
+      return dbRun('DELETE FROM users WHERE id = ? AND organization_id = ?', [target.id, req.user.organization_id]);
     });
     if (!result.changes) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    for (const row of pdfRows) {
+      try { deleteMessagePdf(row.doc_id); } catch {}
+    }
     return res.json({ success: true, deleted: { id: target.id, username: target.username } });
   } catch (error) {
     console.error('Suppression utilisateur impossible:', error.message);
@@ -89,12 +112,18 @@ router.delete('/:id', (req, res) => {
 });
 
 router.post('/:id/reset-password', (req, res) => {
-  const target = dbGet('SELECT id FROM users WHERE id = ?', [req.params.id]);
+  const target = dbGet(
+    'SELECT id FROM users WHERE id = ? AND organization_id = ?',
+    [req.params.id, req.user.organization_id],
+  );
   if (!target) return res.status(404).json({ error: 'Utilisateur introuvable' });
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
   const tempPass = Array.from({ length: 24 }, () => chars[crypto.randomInt(0, chars.length)]).join('');
   const hash = bcrypt.hashSync(tempPass, 12);
-  dbRun('UPDATE users SET password=?, token_version=token_version + 1 WHERE id=?', [hash, req.params.id]);
+  dbRun(
+    'UPDATE users SET password=?, token_version=token_version + 1 WHERE id=? AND organization_id=?',
+    [hash, req.params.id, req.user.organization_id],
+  );
   disconnectUser(req.params.id, 'Mot de passe réinitialisé');
   res.json({ success: true, temporary_password: tempPass });
 });

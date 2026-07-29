@@ -115,7 +115,7 @@ export function authMiddleware(req, res, next) {
     if (isTokenBlacklisted(decoded.jti)) {
       return res.status(401).json({ error: 'Session révoquée' });
     }
-    const currentUser = dbGet('SELECT id, username, role, department, organization_id, active, token_version FROM users WHERE id = ?', [decoded.id]);
+    const currentUser = dbGet('SELECT id, username, role, department, organization_id, full_name, email, active, token_version FROM users WHERE id = ?', [decoded.id]);
     if (!currentUser || !currentUser.active) {
       return res.status(401).json({ error: 'Compte indisponible' });
     }
@@ -134,6 +134,8 @@ export function authMiddleware(req, res, next) {
       username: currentUser.username,
       role: currentUser.role,
       department: currentUser.department,
+      full_name: currentUser.full_name,
+      email: currentUser.email,
       organization_id: currentUser.organization_id || decoded.organization_id || 'org_default',
       permissions: getRolePermissions(currentUser.role),
     };

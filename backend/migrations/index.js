@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { upgradeSecret } from '../secrets.js';
 
 function getTableColumns(db, table) {
   if (db.engine === 'postgres') {
@@ -326,6 +327,185 @@ const migrations = [
       db.exec(`UPDATE company_settings
         SET company_activity = 'Importateur et Distributeur de Piece de Rechange de Poids Lourd'
         WHERE company_activity IS NULL OR trim(company_activity) = ''`);
+    },
+  },
+  {
+    version: '20260729_015_message_organization_scope',
+    description: 'Isolation organisationnelle des messages',
+    up(db) {
+      const columns = getTableColumns(db, 'messages');
+      if (!columns.has('organization_id')) {
+        db.exec("ALTER TABLE messages ADD COLUMN organization_id TEXT DEFAULT 'org_default'");
+      }
+      db.exec(`UPDATE messages
+        SET organization_id = COALESCE(
+          (SELECT users.organization_id FROM users WHERE users.id = messages.sender_id),
+          'org_default'
+        )
+        WHERE organization_id IS NULL OR organization_id = ''`);
+      db.exec('CREATE INDEX IF NOT EXISTS idx_messages_organization_created ON messages(organization_id, created_at DESC)');
+    },
+  },
+  {
+    version: '20260729_016_gmail_multi_accounts',
+    description: 'Comptes Gmail personnels et partages avec permissions',
+    up(db) {
+      db.exec(`CREATE TABLE IF NOT EXISTS email_accounts (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        user_id TEXT,
+        account_type TEXT NOT NULL CHECK(account_type IN ('personal','organization','shared')),
+        email_address TEXT NOT NULL,
+        encrypted_app_password TEXT NOT NULL,
+        sender_name TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+        is_default INTEGER NOT NULL DEFAULT 0 CHECK(is_default IN (0,1)),
+        smtp_enabled INTEGER NOT NULL DEFAULT 1 CHECK(smtp_enabled IN (0,1)),
+        imap_enabled INTEGER NOT NULL DEFAULT 1 CHECK(imap_enabled IN (0,1)),
+        mail_connected_at TEXT,
+        mail_last_uid INTEGER NOT NULL DEFAULT 0,
+        mail_uid_validity TEXT,
+        mail_last_sync_at TEXT,
+        last_test_status TEXT,
+        last_test_at TEXT,
+        created_by TEXT,
+        updated_by TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        CHECK(
+          (account_type='personal' AND user_id IS NOT NULL)
+          OR (account_type IN ('organization','shared') AND user_id IS NULL)
+        ),
+        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+      )`);
+      db.exec(`CREATE TABLE IF NOT EXISTS email_account_permissions (
+        id TEXT PRIMARY KEY,
+        email_account_id TEXT NOT NULL,
+        user_id TEXT,
+        role_name TEXT,
+        can_send INTEGER NOT NULL DEFAULT 0 CHECK(can_send IN (0,1)),
+        can_read INTEGER NOT NULL DEFAULT 0 CHECK(can_read IN (0,1)),
+        allowed_document_types TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        CHECK(
+          (user_id IS NOT NULL AND role_name IS NULL)
+          OR (user_id IS NULL AND role_name IS NOT NULL)
+        ),
+        FOREIGN KEY (email_account_id) REFERENCES email_accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )`);
+      db.exec(`CREATE TABLE IF NOT EXISTS email_account_preferences (
+        user_id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        default_account_id TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+        FOREIGN KEY (default_account_id) REFERENCES email_accounts(id) ON DELETE SET NULL
+      )`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS email_accounts_personal_user_unique
+        ON email_accounts(organization_id,user_id) WHERE account_type='personal'`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS email_accounts_organization_email_unique
+        ON email_accounts(organization_id,lower(email_address)) WHERE account_type IN ('organization','shared')`);
+      db.exec('CREATE INDEX IF NOT EXISTS email_accounts_organization_active ON email_accounts(organization_id,is_active,account_type)');
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS email_permissions_account_user_unique
+        ON email_account_permissions(email_account_id,user_id) WHERE user_id IS NOT NULL`);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS email_permissions_account_role_unique
+        ON email_account_permissions(email_account_id,role_name) WHERE role_name IS NOT NULL`);
+
+      const addColumn = (table, column, definition) => {
+        const columns = getTableColumns(db, table);
+        if (!columns.has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      };
+      addColumn('email_history', 'organization_id', 'TEXT');
+      addColumn('email_history', 'email_account_id', 'TEXT');
+      addColumn('email_history', 'sender_user_id', 'TEXT');
+      addColumn('email_history', 'document_type', 'TEXT');
+      addColumn('email_history', 'document_id', 'TEXT');
+      addColumn('email_history', 'status', "TEXT NOT NULL DEFAULT 'sent'");
+      addColumn('email_history', 'error_code', 'TEXT');
+
+      db.exec(`UPDATE email_history
+        SET organization_id = COALESCE(
+          (SELECT users.organization_id FROM users WHERE users.id = email_history.user_id),
+          'org_default'
+        ),
+        sender_user_id = COALESCE(sender_user_id, user_id)
+        WHERE organization_id IS NULL OR sender_user_id IS NULL`);
+
+      const legacyUsers = db.prepare(`SELECT id, organization_id, username, full_name, smtp_user, smtp_pass,
+        mail_connected_at, mail_last_uid, mail_uid_validity, mail_last_sync_at
+        FROM users
+        WHERE smtp_user IS NOT NULL AND trim(smtp_user) != ''
+          AND smtp_pass IS NOT NULL AND smtp_pass != ''`).all();
+      for (const user of legacyUsers) {
+        const existing = db.prepare(`SELECT id FROM email_accounts
+          WHERE organization_id=? AND user_id=? AND account_type='personal'`).get(user.organization_id, user.id);
+        const encrypted = upgradeSecret(user.smtp_pass);
+        if (encrypted !== user.smtp_pass) {
+          db.prepare('UPDATE users SET smtp_pass=? WHERE id=?').run(encrypted, user.id);
+        }
+        let accountId = existing?.id;
+        if (!accountId) {
+          accountId = crypto.randomUUID();
+          db.prepare(`INSERT INTO email_accounts
+            (id,organization_id,user_id,account_type,email_address,encrypted_app_password,sender_name,
+             is_active,is_default,smtp_enabled,imap_enabled,mail_connected_at,mail_last_uid,
+             mail_uid_validity,mail_last_sync_at,created_by,updated_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+            accountId,
+            user.organization_id || 'org_default',
+            user.id,
+            'personal',
+            String(user.smtp_user).trim().toLowerCase(),
+            encrypted,
+            user.full_name || user.username || '',
+            1,
+            1,
+            1,
+            1,
+            user.mail_connected_at,
+            Number(user.mail_last_uid || 0),
+            user.mail_uid_validity,
+            user.mail_last_sync_at,
+            user.id,
+            user.id,
+          );
+        }
+        db.prepare(`INSERT OR IGNORE INTO email_account_preferences
+          (user_id,organization_id,default_account_id,updated_at)
+          VALUES (?,?,?,datetime('now'))`).run(
+          user.id,
+          user.organization_id || 'org_default',
+          accountId,
+        );
+      }
+
+      db.exec(`UPDATE email_history
+        SET email_account_id = (
+          SELECT accounts.id
+          FROM email_accounts accounts
+          WHERE accounts.organization_id = email_history.organization_id
+            AND lower(accounts.email_address) = lower(email_history.account_email)
+            AND (accounts.user_id = email_history.user_id OR accounts.user_id IS NULL)
+          LIMIT 1
+        )
+        WHERE email_account_id IS NULL AND account_email IS NOT NULL`);
+      db.exec('CREATE INDEX IF NOT EXISTS email_history_organization_date ON email_history(organization_id,created_at DESC)');
+      db.exec('CREATE INDEX IF NOT EXISTS email_history_account_date ON email_history(email_account_id,created_at DESC)');
+
+      if (db.engine === 'postgres') {
+        db.exec('ALTER TABLE email_accounts ENABLE ROW LEVEL SECURITY');
+        db.exec('ALTER TABLE email_account_permissions ENABLE ROW LEVEL SECURITY');
+        db.exec('ALTER TABLE email_account_preferences ENABLE ROW LEVEL SECURITY');
+        db.exec('REVOKE ALL ON TABLE email_accounts FROM anon, authenticated');
+        db.exec('REVOKE ALL ON TABLE email_account_permissions FROM anon, authenticated');
+        db.exec('REVOKE ALL ON TABLE email_account_preferences FROM anon, authenticated');
+      }
     },
   },
 ];
