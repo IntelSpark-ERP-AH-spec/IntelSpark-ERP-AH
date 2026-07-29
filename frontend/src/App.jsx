@@ -117,7 +117,68 @@ const THEMES = {
 };
 const STATUS_DOCUMENT_TYPES = new Set(['DEV', 'BL', 'BC', 'FACT', 'AVOIR']);
 const CLIENT_PRINT_DOCUMENT_TYPES = new Set(['DEV', 'BL', 'FACT', 'AVOIR']);
-const COMPANY_ACTIVITY_LINE = 'Importateur et Distributeur de Piece de Rechange de Poids Lourd';
+const DEFAULT_COMPANY_ACTIVITY = 'Importateur et Distributeur de Piece de Rechange de Poids Lourd';
+const COMPANY_ASSET_FALLBACK_MAX_BYTES = 700 * 1024;
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Lecture image impossible'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      blob => (blob ? resolve(blob) : reject(new Error('Conversion image impossible'))),
+      type,
+      quality,
+    );
+  });
+}
+
+async function createSharedCompanyAsset(file) {
+  if (file.type !== 'image/svg+xml' && file.size <= COMPANY_ASSET_FALLBACK_MAX_BYTES) {
+    return blobToDataUrl(file);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error('Image invalide'));
+      element.src = objectUrl;
+    });
+    const sourceWidth = Math.max(1, image.naturalWidth || image.width);
+    const sourceHeight = Math.max(1, image.naturalHeight || image.height);
+    let scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
+    let quality = 0.9;
+    let converted = null;
+
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+      canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Conversion image impossible');
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      converted = await canvasToBlob(canvas, 'image/webp', quality);
+      if (converted.size <= COMPANY_ASSET_FALLBACK_MAX_BYTES) break;
+      quality = Math.max(0.62, quality - 0.07);
+      scale *= 0.82;
+    }
+
+    if (!converted || converted.size > COMPANY_ASSET_FALLBACK_MAX_BYTES) {
+      throw new Error('Logo trop volumineux après optimisation');
+    }
+    return blobToDataUrl(converted);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 function documentAmount(document, kind) {
   const legacyKey = kind === 'ht' ? 'totalHT' : kind === 'tva' ? 'totalTVA' : 'totalTTC';
@@ -163,7 +224,7 @@ const TRANSLATIONS = {
     factTab: "Facture", refTab: "Catalogue", stockTab: "Stock", pipelineTab: "CRM",
     statsTab: "Reporting", iaTab: "IA", histTab: "Historique", clientsTab: "Clients", statusTab: "Statut",
     activeDoc: "Document :", exportBtn: "Exporter", saveBtn: "Enregistrer",
-    refLabel: "Référence", descLabel: "Désignation", priceLabel: "Prix unitaire", qtyLabel: "Qte", addBtn: "Ajouter", itemFieldsRequired: "Remplissez référence, désignation, quantité et prix avant ajout.",
+    refLabel: "Référence", descLabel: "Désignation", priceLabel: "Prix unitaire", qtyLabel: "Quantité", addBtn: "Ajouter", itemFieldsRequired: "Remplissez référence, désignation, quantité et prix avant ajout.",
     fournisseur: "Fournisseur", dateEntree: "Entrée",
     currencyLabel: "Devise", regionLabel: "Région", translationLabel: "Langue",
     destinatary: "COORDONNÉES DU CLIENT", representative: "Représentant", vRef: "V/Référence", dateDoc: "Date",
@@ -1533,15 +1594,16 @@ const ls = {
 
 const COMPANY_SYNC_KEYS = new Set([
   'is_company_name', 'is_company_address', 'is_company_phone',
-  'is_company_email', 'is_footer', 'is_logo', 'is_brands',
+  'is_company_email', 'is_company_activity', 'is_footer', 'is_logo', 'is_brands',
 ]);
 const COMPANY_IDENTITY_KEYS = new Set([
-  'is_company_name', 'is_company_address', 'is_company_phone', 'is_company_email', 'is_logo',
+  'is_company_name', 'is_company_address', 'is_company_phone',
+  'is_company_email', 'is_company_activity', 'is_logo',
 ]);
 const COMPANY_BRANDING_KEYS = new Set(['is_footer', 'is_brands']);
 
 const ADMIN_SHARED_SEED_KEYS = [
-  'is_logo', 'is_brands', 'is_footer', 'is_company_name', 'is_catalog',
+  'is_logo', 'is_brands', 'is_footer', 'is_company_name', 'is_company_activity', 'is_catalog',
 ];
 
 const hasMeaningfulSyncValue = value => {
@@ -1986,7 +2048,7 @@ const BulletinsPage = ({ t, language }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const { user, loading, logout, saveData, saveCompanyData, loadData, hasRole, organization, realtimeStatus, realtimeRevision } = useAuth();
+  const { user, loading, logout, saveData, saveCompanyData, loadData, hasRole, organization, realtimeRevision } = useAuth();
   const { connect, disconnect, onlineUsers, connected, lastNotification } = useWS();
   const i18n = useAppI18n();
   const canDelete = hasRole('admin');
@@ -2179,6 +2241,7 @@ export default function App() {
   const [companyAddress, setCompanyAddress] = useState(() => ls.get('is_company_address', ''));
   const [companyPhone, setCompanyPhone] = useState(() => ls.get('is_company_phone', ''));
   const [companyEmail, setCompanyEmail] = useState(() => ls.get('is_company_email', ''));
+  const [companyActivity, setCompanyActivity] = useState(() => ls.get('is_company_activity', DEFAULT_COMPANY_ACTIVITY));
   const [companyFooter, setCompanyFooter] = useState(() => ls.get('is_footer', ''));
   const [brands, setBrands] = useState(() => ls.getJSON('is_brands', []));
   const [companyEditMode, setCompanyEditMode] = useState(false);
@@ -2280,7 +2343,7 @@ export default function App() {
   const isPrintingRef = useRef(false);
 
   const [maxRows, setMaxRows] = useState(20);
-  const printMinRows = 15;
+  const printMinRows = 20;
   const maxRowsRef = useRef(20);
   const itemsLenRef = useRef(0);
   useEffect(() => {
@@ -2969,9 +3032,10 @@ export default function App() {
       return /^(data:image\/|blob:|https?:\/\/|\/)/i.test(source) ? esc(source) : '';
     };
     const printItems = Array.isArray(items) ? items : [];
+    const usesClientPrintLayout = CLIENT_PRINT_DOCUMENT_TYPES.has(documentType);
     const slotCount = Math.max(15, printItems.length);
     const blankCount = Math.max(0, slotCount - printItems.length);
-    const rowHeight = 147 / slotCount;
+    const rowHeight = (usesClientPrintLayout ? 127 : 147) / slotCount;
     const blankHeight = rowHeight;
     const filledHeight = rowHeight;
     const filledRows = printItems.map((item) => {
@@ -2988,7 +3052,6 @@ export default function App() {
       return Number.isInteger(number) ? number.toFixed(0) : number.toFixed(2);
     };
     const clientTitle = documentType === 'BC' ? t.fournisseur : 'Client';
-    const usesClientPrintLayout = CLIENT_PRINT_DOCUMENT_TYPES.has(documentType);
     const paymentChoices = [t.paymentCheque, t.paymentCash, t.paymentTransfer, t.paymentEffet]
       .map(method => {
         const selected = paymentMethod === method;
@@ -2997,20 +3060,21 @@ export default function App() {
     const legal = companyFooter || [companyName, companyAddress, companyEmail, companyPhone].filter(Boolean).join(' · ');
     const brandHtml = brands.map(brand => `<div class="brand"><img src="${safeImage(brand.logo)}" alt=""></div>`).join('');
     const logoHtml = companyLogo ? `<img class="company-logo" src="${safeImage(companyLogo)}" alt="Logo">` : '';
+    const activityLineHtml = `<span>${esc(companyActivity)}</span>`;
 
-    return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><link rel="stylesheet" href="/print-document.css?v=20260721-1"><style${cspNonce ? ` nonce="${esc(cspNonce)}"` : ''}>
+    return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><link rel="stylesheet" href="/print-document.css?v=20260729-2"><style${cspNonce ? ` nonce="${esc(cspNonce)}"` : ''}>
       @page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{width:210mm;height:297mm;margin:0;padding:0;overflow:hidden;background:#fff}body{font-family:Arial,Helvetica,sans-serif;color:#20252d;font-size:7.2pt;line-height:1.2}
-      .sheet{width:210mm;height:297mm;padding:5mm 8mm 4mm;display:grid;grid-template-rows:38mm 10mm 14mm 155mm 26mm 18mm 22mm;gap:.5mm;overflow:hidden;background:#fff}
-      .head{display:grid;grid-template-columns:29% 43% 28%;grid-template-rows:38mm;width:100%;height:38mm;align-items:start;border-bottom:.35mm solid #8f98a3;overflow:hidden}.head>.logo,.head>.company,.head>.client{width:100%;min-width:0;height:100%;min-height:0;max-height:100%;padding:0 2mm 2mm;align-self:start;overflow:hidden}.head>.company{padding-left:.5mm}.logo{display:grid;place-items:start start}.company-logo{display:block;width:52mm;height:32mm;object-fit:contain;object-position:left top}.logo-placeholder{margin-top:0;font-size:9pt;font-weight:700}.client-document .head{grid-template-columns:33% 37% 30%}.client-document .company-logo{width:65mm;height:35mm}
-      .company,.client{display:grid;align-content:start;justify-items:start}.company strong{display:block;margin-bottom:2mm;font-size:12pt;line-height:1.05;text-transform:uppercase}.company span{display:block;margin-bottom:1.2mm;font-size:8.6pt;line-height:1.15}.client strong{display:block;margin-bottom:1.5mm;font-size:8.5pt;line-height:1.05;text-transform:uppercase}.client div,.client span{display:block;margin-bottom:1mm;font-size:7.8pt}.client div{font-weight:700;line-height:1.3}.activity-line{height:100%;display:grid!important;place-items:center;text-align:center;font-size:9.2pt!important;line-height:1.35!important;font-weight:900!important;font-style:italic}.client-document .company strong{font-size:15pt;color:#000}.client-document .company span{font-size:10pt}.client-document .activity-line{width:100%;font-size:13pt!important;line-height:1.2!important;word-break:break-word}
-      .title{display:grid;place-items:center;font-size:9.5pt;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.client-document .title{place-items:center start;text-align:left}.meta{display:grid;grid-template-columns:1fr 1fr;border:.25mm solid #aab1ba}.client-document .meta{grid-template-columns:calc(17% - .17mm) minmax(0,1fr)}.meta-cell{padding:2mm 2.5mm;border-right:.25mm solid #aab1ba;overflow:hidden}.meta-cell:last-child{border-right:0}.meta-cell strong{display:block;margin-bottom:1.5mm;font-size:7.5pt;text-transform:uppercase}.meta-cell span{font-size:7.2pt}.client-meta{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:start;gap:1mm 3mm}.client-meta strong{margin:0}.client-meta .client-value{font-size:7.6pt;font-weight:700;line-height:1.2}.client-meta .client-ice{font-size:7.2pt;white-space:nowrap}
-      .items{width:100%;height:155mm;table-layout:fixed;border-collapse:collapse;border:0;font-variant-numeric:tabular-nums}.items col:nth-child(1){width:17%}.items col:nth-child(2){width:33%}.items col:nth-child(3){width:8%}.items col:nth-child(4){width:16%}.items col:nth-child(5){width:11%}.items col:nth-child(6){width:15%}.items th,.items td{border:0;border-bottom:.22mm solid #b3bac3;padding:1mm 1.2mm;text-align:center;vertical-align:middle;overflow:hidden}.items thead tr{height:8mm}.items th{font-size:6.6pt;font-weight:800;white-space:nowrap}.items td{font-size:6.8pt}.items tbody tr:last-child td{border-bottom:0}.items .ref{font-family:Consolas,monospace}.items .amount{font-weight:800}.items .blank td{padding:0}.client-document .items th,.client-document .items td{border:0;border-right:.3mm solid #8f98a3}.client-document .items th:last-child,.client-document .items td:last-child{border-right:0}.client-document .items thead tr{background:#f8fafc}.client-document .items th{font-size:7pt}
-      .summary{display:grid;grid-template-columns:38% 24% 38%;gap:.6mm;border:0;overflow:hidden}.box{min-width:0;padding:1.5mm 2mm;border:.25mm solid #aab1ba;border-radius:1mm;overflow:hidden}.box:last-child{border:.25mm solid #aab1ba}.sum-title{display:block;margin-bottom:1mm;text-align:center;font-size:7.4pt;font-weight:900;text-transform:uppercase}.methods{display:flex;justify-content:center;gap:2mm;margin-bottom:.8mm;white-space:nowrap}.choice{display:inline-flex;align-items:center;gap:.6mm;font-size:6.4pt}.radio{width:2.6mm;height:2.6mm;border:.28mm solid #6b7280;border-radius:50%;display:inline-block;position:relative;box-sizing:border-box;flex:0 0 auto;vertical-align:middle;background:#fff}.radio.selected{border-color:#1377b7;background:#fff}.radio-dot{display:block;width:1.7mm;height:1.7mm;border:.85mm solid #1377b7;border-radius:50%;box-sizing:border-box;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}.sum-line{display:flex;justify-content:space-between;gap:2mm;min-height:4mm;align-items:center;font-size:6.8pt;font-variant-numeric:tabular-nums}.sum-line strong{font-weight:800;white-space:nowrap}.tax{display:grid;align-content:center}.net{margin-top:.6mm;padding-top:.8mm;border-top:0;font-size:7.2pt;font-weight:900;text-transform:uppercase}
+      .sheet{width:210mm;height:297mm;padding:5mm 8mm 4mm;display:grid;grid-template-rows:38mm 10mm 14mm 155mm 26mm 18mm 22mm;gap:.5mm;overflow:hidden;background:#fff}.sheet.client-document{grid-template-rows:46mm 10mm 26mm 135mm 26mm 18mm 22mm}
+      .head{display:grid;grid-template-columns:29% 43% 28%;grid-template-rows:38mm;width:100%;height:38mm;align-items:start;border-bottom:.35mm solid #8f98a3;overflow:hidden}.head>.logo,.head>.company,.head>.client{width:100%;min-width:0;height:100%;min-height:0;max-height:100%;padding:0 2mm 2mm;align-self:start;overflow:hidden}.head>.company{padding-left:.5mm}.logo{display:grid;place-items:start start}.company-logo{display:block;width:52mm;height:32mm;object-fit:contain;object-position:left top}.logo-placeholder{margin-top:0;font-size:9pt;font-weight:700}.client-document .head{grid-template-columns:31% 29% minmax(0,40%);grid-template-rows:46mm;height:46mm;overflow:visible}.client-document .head>.company{position:relative;z-index:1}.client-document .head>.client{position:relative;z-index:2;width:100%;min-width:0;max-width:100%;padding:0 3mm 2mm 1mm;overflow:visible}.client-document .company-logo{width:65mm;height:35mm}
+      .company,.client{display:grid;align-content:start;justify-items:start}.company strong{display:block;margin-bottom:2mm;font-size:12pt;line-height:1.05;text-transform:uppercase}.company span{display:block;margin-bottom:1.2mm;font-size:8.6pt;line-height:1.15}.client strong{display:block;margin-bottom:1.5mm;font-size:8.5pt;line-height:1.05;text-transform:uppercase}.client div,.client span{display:block;margin-bottom:1mm;font-size:7.2pt}.client div{font-weight:700;line-height:1.25}.activity-line{height:100%;min-width:0;max-width:100%;display:grid!important;place-items:center;text-align:center;font-family:Arial,'Helvetica Neue',sans-serif;font-size:9.2pt!important;line-height:1.35!important;font-weight:500!important;font-style:normal;white-space:normal;overflow:visible;overflow-wrap:break-word;word-break:normal;text-overflow:unset}.activity-line>span{display:block;width:100%;min-width:0;max-width:100%;margin:0;white-space:normal;overflow:visible;overflow-wrap:break-word;word-break:normal;text-overflow:unset}.client-document .company strong{font-size:15pt;color:#000}.client-document .company span{font-size:8.2pt}.client-document .activity-line{width:100%;font-size:19pt!important;line-height:1.08!important;font-weight:900!important;font-style:italic!important;transform:skewX(-7deg);transform-origin:center}.client-document .activity-line>span{margin:0;font-family:inherit;font-size:inherit;font-weight:inherit;font-style:inherit;line-height:inherit}
+      .title{display:grid;place-items:center;font-size:9.5pt;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.client-document .title{place-items:center start;text-align:left}.meta{display:grid;grid-template-columns:1fr 1fr;border:.25mm solid #aab1ba}.client-document .meta{grid-template-columns:calc(17% - .17mm) minmax(0,1fr)}.meta-cell{padding:2mm 2.5mm;border-right:.25mm solid #aab1ba;overflow:hidden}.meta-cell:last-child{border-right:0}.meta-cell strong{display:block;margin-bottom:1.5mm;font-size:7.5pt;text-transform:uppercase}.meta-cell span{font-size:7.2pt}.client-meta{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:start;gap:1mm 3mm}.client-meta strong{margin:0}.client-document .date-cell>strong,.client-document .client-meta>strong{font-size:8.2pt;line-height:1.15}.client-document .date-cell>span{font-size:8.8pt;font-weight:800;line-height:1.15}.client-meta .client-value{font-size:10pt;font-weight:700;line-height:1.2}.client-meta .client-ice{font-size:10pt;font-weight:800;white-space:nowrap}
+      .items{width:100%;height:155mm;table-layout:fixed;border-collapse:collapse;border:0;font-variant-numeric:tabular-nums}.items col:nth-child(1){width:17%}.items col:nth-child(2){width:33%}.items col:nth-child(3){width:8%}.items col:nth-child(4){width:16%}.items col:nth-child(5){width:11%}.items col:nth-child(6){width:15%}.items th,.items td{border:0;border-bottom:.22mm solid #b3bac3;padding:1mm 1.2mm;text-align:center;vertical-align:middle;overflow:hidden}.items thead tr{height:8mm}.items th{font-size:6.6pt;font-weight:800;white-space:nowrap}.items td{font-size:6.8pt}.items tbody tr:last-child td{border-bottom:0}.items .ref{font-family:Consolas,monospace}.items .amount{font-weight:800}.items .blank td{padding:0}.client-document .items{height:135mm;align-self:stretch}.client-document .items th,.client-document .items td{border:0;border-right:.3mm solid #8f98a3}.client-document .items thead th{border-bottom:.5mm solid #94a3b8}.client-document .items th:last-child,.client-document .items td:last-child{border-right:0}.client-document .items thead tr{background:#f8fafc}.client-document .items th{font-size:7pt}
+      .client-document .items{overflow:hidden}.summary{display:grid;grid-template-columns:38% 24% 38%;gap:.6mm;border:0;overflow:hidden}.box{min-width:0;padding:1.5mm 2mm;border:.25mm solid #aab1ba;border-radius:1mm;overflow:hidden}.box:last-child{border:.25mm solid #aab1ba}.sum-title{display:block;margin-bottom:1mm;text-align:center;font-size:7.4pt;font-weight:900;text-transform:uppercase}.methods{display:flex;justify-content:center;gap:2mm;margin-bottom:.8mm;white-space:nowrap}.choice{display:inline-flex;align-items:center;gap:.6mm;font-size:6.4pt}.radio{width:2.6mm;height:2.6mm;border:.28mm solid #6b7280;border-radius:50%;display:inline-block;position:relative;box-sizing:border-box;flex:0 0 auto;vertical-align:middle;background:#fff}.radio.selected{border-color:#1377b7;background:#fff}.radio-dot{display:block;width:1.7mm;height:1.7mm;border:.85mm solid #1377b7;border-radius:50%;box-sizing:border-box;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}.sum-line{display:flex;justify-content:space-between;gap:2mm;min-height:4mm;align-items:center;font-size:6.8pt;font-variant-numeric:tabular-nums}.sum-line strong{font-weight:800;white-space:nowrap}.tax{display:grid;align-content:center}.net{margin-top:.6mm;padding-top:.8mm;border-top:0;font-size:7.2pt;font-weight:900;text-transform:uppercase}
       .legal{display:grid;align-content:center;justify-items:center;padding:1.5mm 8mm 1mm;border-top:.9mm solid #000;text-align:center;overflow:hidden}.legal strong{display:block;margin-bottom:1mm;font-size:7.2pt}.legal div{font-size:6.7pt;line-height:1.3}.brands{margin:0;padding:1.5mm 2mm 1mm;border:0;border-top:.9mm solid #000;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;align-items:center;gap:1mm 2mm;overflow:hidden;background:#fff}.brand{flex:0 0 calc((100% - 14mm)/8);max-width:calc((100% - 14mm)/8);height:8mm;display:grid;place-items:center;overflow:hidden}.brand img{display:block;width:100%;height:8mm;object-fit:contain}
     </style></head><body><article class="sheet ${usesClientPrintLayout ? 'client-document' : ''}">
-      <header class="head"><div class="logo">${logoHtml}</div><div class="company"><strong>${esc(companyName || 'Entreprise')}</strong><span>${esc(companyAddress)}</span><span>${esc(companyPhone)}</span><span>${esc(companyEmail)}</span></div><div class="client">${usesClientPrintLayout ? `<div class="activity-line">${esc(COMPANY_ACTIVITY_LINE)}</div>` : `<strong>${esc(clientTitle)}</strong><div>${lines(clientDetails || 'Client non renseigné')}</div>${clientICE ? `<span>ICE : ${esc(clientICE)}</span>` : ''}`}</div></header>
+      <header class="head"><div class="logo">${logoHtml}</div><div class="company"><strong>${esc(companyName || 'Entreprise')}</strong><span>${esc(companyAddress)}</span><span>${esc(companyPhone)}</span><span>${esc(companyEmail)}</span></div><div class="client">${usesClientPrintLayout ? `<div class="activity-line">${activityLineHtml}</div>` : `<strong>${esc(clientTitle)}</strong><div>${lines(clientDetails || 'Client non renseigné')}</div>${clientICE ? `<span>ICE : ${esc(clientICE)}</span>` : ''}`}</div></header>
       <section class="title">${esc(docTitle)} N° ${esc(documentNumber)}</section>
-      <section class="meta">${usesClientPrintLayout ? `<div class="meta-cell date-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span>${documentType === 'AVOIR' && parentFactRef ? `<span>${esc(t.factOrig)} : ${esc(parentFactRef)}</span>` : ''}</div><div class="meta-cell client-meta"><strong>${esc(clientTitle)}</strong><span class="client-value">${lines(clientDetails || 'Client non renseigné')}</span>${clientICE ? `<span class="client-ice">ICE : ${esc(clientICE)}</span>` : ''}</div>` : `<div class="meta-cell"><strong>${esc(t.representative)}</strong><span>${esc(representative)}</span></div><div class="meta-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span></div>`}</section>
+      <section class="meta">${usesClientPrintLayout ? `<div class="meta-cell date-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span>${documentType === 'AVOIR' && parentFactRef ? `<span>${esc(t.factOrig)} : ${esc(parentFactRef)}</span>` : ''}</div><div class="meta-cell client-meta"><strong>${esc(clientTitle)} :</strong><span class="client-value">${lines(clientDetails || 'Client non renseigné')}</span>${clientICE ? `<span class="client-ice">ICE : ${esc(clientICE)}</span>` : ''}</div>` : `<div class="meta-cell"><strong>${esc(t.representative)}</strong><span>${esc(representative)}</span></div><div class="meta-cell"><strong>${esc(t.dateDoc)}</strong><span>${esc(dateText)}</span></div>`}</section>
       <table class="items"><colgroup><col><col><col><col><col><col></colgroup><thead><tr><th>${esc(t.refLabel)}</th><th>${esc(t.descLabel)}</th><th>${esc(t.qtyLabel)}</th><th>${esc(t.priceLabel)}</th><th>Remise %</th><th>${esc(t.montantHT)}</th></tr></thead><tbody>${filledRows}${blankRows}</tbody></table>
       <section class="summary"><div class="box payment-box"><strong class="sum-title">${esc(t.paymentMethod)}</strong><div class="methods">${paymentChoices}</div><div class="sum-line"><span>${esc(t.dueDate)} :</span><strong>${esc(paymentDueDate)}</strong></div><div class="sum-line"><span>${esc(t.timbreFiscal)} :</span><strong>${compactNumber(timbreFiscal)} ${esc(currencySymbol)}</strong></div><div class="sum-line"><span>${esc(t.acompte)} :</span><strong>${compactNumber(acompte)} ${esc(currencySymbol)}</strong></div></div><div class="box tax tax-box">${usesClientPrintLayout ? '' : '<strong class="sum-title">Taxes</strong>'}<div class="sum-line"><span>TVA %</span><strong>${compactNumber(docTvaRate)}</strong></div><div class="sum-line"><span>${esc(t.discountLabel)} %</span><strong>${discountRate.toFixed(2)}</strong></div></div><div class="box amounts-box"><div class="sum-line"><span>${esc(t.totalHT)}</span><strong>${totals.ht.toFixed(2)} ${esc(currencySymbol)}</strong></div><div class="sum-line"><span>TVA ${Number(docTvaRate || 0).toFixed(0)}%</span><strong>${totals.tva.toFixed(2)} ${esc(currencySymbol)}</strong></div><div class="sum-line net"><span>${esc(t.netToPay)}</span><strong>${totals.ttc.toFixed(2)} ${esc(currencySymbol)}</strong></div></div></section>
       <footer class="legal"><strong>${esc(t.footerLabel)}</strong><div>${lines(legal)}</div></footer><section class="brands">${brandHtml}</section>
@@ -3301,19 +3365,26 @@ export default function App() {
   };
 
   const uploadCompanyAsset = useCallback(async (file, { persist = false, kind = 'logo' } = {}) => {
-      if (!organization?.logo_upload_url) throw new Error('Stockage logo indisponible');
+      const createFallbackAsset = () => createSharedCompanyAsset(file);
+      if (!organization?.logo_upload_url) return createFallbackAsset();
       const body = new FormData();
       body.append('file', file);
       const uploadUrl = new URL(organization.logo_upload_url, window.location.origin);
       uploadUrl.searchParams.set('kind', kind);
       if (!persist) uploadUrl.searchParams.set('persist', '0');
-      const response = await fetch(uploadUrl.toString(), {
-        method: 'POST', body,
-        headers: { Authorization: `Bearer ${getAuthToken()}` },
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.url) throw new Error(result.error || 'Envoi impossible');
-      return result.url;
+      try {
+        const response = await fetch(uploadUrl.toString(), {
+          method: 'POST', body,
+          headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.status === 404) return createFallbackAsset();
+        if (!response.ok || !result.url) throw new Error(result.error || 'Envoi impossible');
+        return result.url;
+      } catch (error) {
+        if (error instanceof TypeError) return createFallbackAsset();
+        throw error;
+      }
   }, [organization?.logo_upload_url]);
 
   const handleLogoUpload = async (e) => {
@@ -3484,7 +3555,8 @@ export default function App() {
     is_theme: activeTheme, is_lang: language, is_currency: currencyKey,
     is_font_size: String(globalFontSize), is_font_family: globalFontFamily, is_font_color: globalFontColor,
     is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
-    is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo,
+    is_company_email: companyEmail, is_company_activity: companyActivity,
+    is_footer: companyFooter, is_logo: companyLogo,
     is_brands: brands, is_catalog: catalog, is_items: items, is_leads: leads, is_clients: clients,
     is_saved_docs: savedDocs, is_history_log: documentHistory,
     is_doc_type: documentType, is_doc_num: documentNumber, is_doc_status: documentStatus,
@@ -3509,10 +3581,15 @@ export default function App() {
     const values = scope === 'branding'
       ? { is_footer: companyFooter, is_brands: brands }
       : scope === 'identity'
-        ? { is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone, is_company_email: companyEmail, is_logo: companyLogo }
+        ? {
+          is_company_name: companyName, is_company_address: companyAddress,
+          is_company_phone: companyPhone, is_company_email: companyEmail,
+          is_company_activity: companyActivity, is_logo: companyLogo,
+        }
         : {
           is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
-          is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo, is_brands: brands,
+          is_company_email: companyEmail, is_company_activity: companyActivity,
+          is_footer: companyFooter, is_logo: companyLogo, is_brands: brands,
         };
     setCompanySaving(true);
     Object.keys(values).forEach(key => companyDirtyRef.current.add(key));
@@ -3540,7 +3617,7 @@ export default function App() {
     } finally {
       setCompanySaving(false);
     }
-  }, [companySaving, user?.id, companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands, saveCompanyData, notify]);
+  }, [companySaving, user?.id, companyName, companyAddress, companyPhone, companyEmail, companyActivity, companyFooter, companyLogo, brands, saveCompanyData, notify]);
 
   useEffect(() => {
     if (!serverSyncReady || !user?.id || !companyEditMode || companySaving || companyDirtyRef.current.size === 0) return undefined;
@@ -3552,14 +3629,14 @@ export default function App() {
     companyAutosaveTimer.current = window.setTimeout(() => {
       companyAutosaveTimer.current = null;
       saveCompanySettings(scope, { silent: true });
-    }, 500 + retryDelay);
+    }, 250 + retryDelay);
     return () => {
       if (companyAutosaveTimer.current) window.clearTimeout(companyAutosaveTimer.current);
       companyAutosaveTimer.current = null;
     };
   }, [
     serverSyncReady, user?.id, companyEditMode, companySaving,
-    companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo, brands,
+    companyName, companyAddress, companyPhone, companyEmail, companyActivity, companyFooter, companyLogo, brands,
     saveCompanySettings,
   ]);
 
@@ -3588,6 +3665,9 @@ export default function App() {
     };
     assignCompany('is_company_name', setCompanyName); assignCompany('is_company_address', setCompanyAddress);
     assignCompany('is_company_phone', setCompanyPhone); assignCompany('is_company_email', setCompanyEmail);
+    assignCompany('is_company_activity', value => setCompanyActivity(
+      typeof value === 'string' ? value : DEFAULT_COMPANY_ACTIVITY,
+    ));
     assignCompany('is_footer', setCompanyFooter); assignCompany('is_logo', setCompanyLogo); assignCompany('is_brands', setBrands);
     if (!catalogDirtyRef.current) assign('is_catalog', value => setCatalogState(Array.isArray(value) ? value : []));
     assign('is_items', setItems); assign('is_leads', setLeads); assign('is_clients', setClients);
@@ -3637,7 +3717,7 @@ export default function App() {
       if (!serverData) {
         window.setTimeout(() => {
           if (!cancelled) setSyncBootstrapAttempt(value => value + 1);
-        }, 2000);
+        }, 750);
         return;
       }
       if (serverData && user.role === 'admin') {
@@ -3692,7 +3772,8 @@ export default function App() {
       is_theme: activeTheme, is_lang: language, is_currency: currencyKey,
       is_font_size: String(globalFontSize), is_font_family: globalFontFamily, is_font_color: globalFontColor,
       is_company_name: companyName, is_company_address: companyAddress, is_company_phone: companyPhone,
-      is_company_email: companyEmail, is_footer: companyFooter, is_logo: companyLogo,
+      is_company_email: companyEmail, is_company_activity: companyActivity,
+      is_footer: companyFooter, is_logo: companyLogo,
       is_brands: brands,
       is_catalog: catalog, is_items: items, is_leads: leads, is_clients: clients,
       is_saved_docs: savedDocs, is_history_log: documentHistory,
@@ -3726,7 +3807,7 @@ export default function App() {
     });
   }, [
     activeTheme, language, currencyKey, globalFontSize, globalFontFamily, globalFontColor,
-    companyName, companyAddress, companyPhone, companyEmail, companyFooter, companyLogo,
+    companyName, companyAddress, companyPhone, companyEmail, companyActivity, companyFooter, companyLogo,
     brands, catalog, items, leads, clients, savedDocs, documentHistory,
     documentType, documentNumber, documentStatus, documentDate, validityDate, clientDetails, clientICE,
     representative, supplierName, orderRef, sourceDevisNumber, paymentMethod, paymentDueDate, parentFactRef,
@@ -3736,7 +3817,7 @@ export default function App() {
   useEffect(() => {
     if (!serverSyncReady || !mounted.current) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(syncToServer, 600);
+    syncTimer.current = setTimeout(syncToServer, 300);
     return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
   }, [serverSyncReady, syncToServer]);
 
@@ -3756,7 +3837,7 @@ export default function App() {
       lastSyncedData.current.set('is_catalog', JSON.stringify(catalog));
       lastSyncedData.current.set('is_admin_shared_initialized', JSON.stringify(true));
     };
-    const saveTimer = window.setTimeout(persistCatalog, 250);
+    const saveTimer = window.setTimeout(persistCatalog, 150);
     return () => {
       cancelled = true;
       window.clearTimeout(saveTimer);
@@ -3884,7 +3965,7 @@ export default function App() {
         padding: 5px 7px !important;
       }
       .app-root .print-company-details input {
-        font-size: 16px !important;
+        font-size: 14px !important;
         line-height: 1.15 !important;
       }
       .app-root .client-document-header .print-company-details input:first-child {
@@ -3893,10 +3974,18 @@ export default function App() {
         font-weight: 900 !important;
       }
       .app-root .client-document-header .print-activity-box strong {
-        font-size: 22px !important;
+        font-size: 24px !important;
         line-height: 1.25 !important;
         font-weight: 900 !important;
         font-style: italic !important;
+      }
+      .app-root .client-document-header .print-activity-box .no-print {
+        display: block !important;
+        font-size: inherit !important;
+        line-height: inherit !important;
+        font-weight: inherit !important;
+        font-style: inherit !important;
+        color: inherit !important;
       }
     }
     .print-payment-methods input[type="radio"] {
@@ -3952,6 +4041,8 @@ export default function App() {
       .print-card table thead th { background: #f8fafc !important; font-weight: 800 !important; }
       .print-card input, .print-card textarea { border: none !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
       .print-header { height: 38mm !important; min-height: 38mm !important; max-height: 38mm !important; padding: 0 0 3mm !important; margin: 0 0 2mm !important; gap: 2mm !important; align-items: flex-start !important; overflow: hidden !important; box-sizing: border-box !important; }
+      .client-document-header { display: grid !important; grid-template-columns: 31% 29% minmax(0, 40%) !important; grid-template-rows: 46mm !important; width: 100% !important; height: 46mm !important; min-height: 46mm !important; max-height: 46mm !important; gap: 0 !important; overflow: visible !important; }
+      .client-document-header > div:first-child { display: contents !important; }
       .print-header > div:first-child { align-items: flex-start !important; }
       .print-logo-column { min-width: 55mm !important; width: 55mm !important; }
       .print-logo-column, .print-company-details, .print-client-box { align-self: flex-start !important; margin-top: 0 !important; padding-top: 0 !important; }
@@ -3964,26 +4055,33 @@ export default function App() {
       .print-client-details { min-height: 20mm !important; max-height: 26mm !important; overflow: hidden !important; white-space: pre-wrap !important; overflow-wrap: anywhere !important; line-height: 1.25 !important; font-size: 9pt !important; font-weight: 700 !important; }
       .print-activity-box { display: grid !important; place-items: center !important; text-align: center !important; }
       .print-activity-box strong { font-size: 9.2pt !important; line-height: 1.35 !important; font-weight: 900 !important; font-style: italic !important; }
-      .client-document-header .print-logo-column { min-width: 62mm !important; width: 62mm !important; }
-      .client-document-header img { max-height: 35mm !important; max-width: 63mm !important; }
+      .client-document-header .print-logo-column { min-width: 0 !important; width: 100% !important; max-width: 100% !important; }
+      .client-document-header img { max-height: 35mm !important; max-width: 100% !important; }
+      .client-document-header .print-company-details { min-width: 0 !important; width: 100% !important; max-width: 100% !important; overflow: visible !important; }
       .client-document-header .print-company-details input:first-child { min-height: 7mm !important; height: 7mm !important; font-size: 15pt !important; color: #000 !important; -webkit-text-fill-color: #000 !important; }
-      .client-document-header .print-company-details input:not(:first-child) { font-size: 10pt !important; }
-      .client-document-header .print-activity-box strong { width: 100% !important; font-size: 13pt !important; line-height: 1.2 !important; }
+      .client-document-header .print-company-details input:not(:first-child) { font-size: 8.2pt !important; }
+      .client-document-header .print-activity-box strong { display: block !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; font-size: 17pt !important; line-height: 1.12 !important; font-weight: 900 !important; font-style: italic !important; white-space: normal !important; overflow: visible !important; overflow-wrap: break-word !important; word-break: normal !important; text-overflow: unset !important; transform: skewX(-7deg) !important; transform-origin: center !important; }
+      .client-document-header .print-activity-box { position: relative !important; z-index: 2 !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important; padding: 0 3mm 2mm 1mm !important; overflow: visible !important; }
+      .client-document-header .print-activity-lines,
+      .client-document-header .print-activity-lines > span { display: block !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important; margin: 0 !important; font-family: Arial, "Helvetica Neue", sans-serif !important; font-size: inherit !important; font-weight: 900 !important; font-style: italic !important; line-height: inherit !important; white-space: normal !important; overflow: visible !important; overflow-wrap: break-word !important; word-break: normal !important; text-overflow: unset !important; }
       .print-title { min-height: 10mm !important; padding: 0 !important; margin: 0 0 1mm !important; display: flex !important; align-items: center !important; justify-content: center !important; }
       .client-document-title { justify-content: flex-start !important; text-align: left !important; }
       .print-title > span:first-child { font-size: 8.5pt !important; }
       .print-status { display: none !important; }
       .print-meta { min-height: 14mm !important; margin-bottom: 1mm !important; border-radius: 0 !important; }
       .print-meta > div { padding: 2mm 2mm !important; min-height: 14mm !important; }
+      .client-document-card .print-meta { min-height: 26mm !important; }
+      .client-document-card .print-meta > div { min-height: 26mm !important; }
       .print-meta input { min-height: 5mm !important; height: 5mm !important; padding: 0 !important; line-height: 1.1 !important; font-size: 8pt !important; }
       .print-client-meta-row { grid-template-columns: calc(17% - 1.32px) minmax(0, 1fr) !important; }
-      .print-date-box { padding: 1.5mm 2mm !important; }
-      .print-date-box input { font-size: 7.6pt !important; }
-      .print-client-meta-box { padding: 1.2mm 2mm !important; display: grid !important; grid-template-columns: max-content minmax(0, 1fr) max-content !important; align-items: start !important; gap: .8mm 2.5mm !important; }
+      .print-date-box { padding: 3mm !important; align-content: start !important; }
+      .print-date-box > span:first-child { display: block !important; margin: 0 0 1.2mm !important; font-size: 8.2pt !important; line-height: 1.15 !important; font-weight: 900 !important; }
+      .print-date-box input { font-size: 8.8pt !important; line-height: 1.15 !important; }
+      .print-client-meta-box { padding: 3mm !important; display: grid !important; grid-template-columns: max-content minmax(0, 1fr) max-content !important; align-items: start !important; gap: 1.2mm 3mm !important; }
       .print-client-meta-box textarea { display: none !important; }
-      .print-client-meta-label { display: block !important; font-size: 7.3pt !important; font-weight: 900 !important; text-transform: uppercase !important; white-space: nowrap !important; }
-      .print-client-meta-box .print-client-details { min-height: 0 !important; max-height: 10mm !important; font-size: 7.8pt !important; line-height: 1.15 !important; }
-      .print-client-ice { margin: 0 !important; font-size: 7.2pt !important; white-space: nowrap !important; }
+      .print-client-meta-label { display: block !important; font-size: 8.2pt !important; line-height: 1.15 !important; font-weight: 900 !important; text-transform: uppercase !important; white-space: nowrap !important; }
+      .print-client-meta-box .print-client-details { min-height: 0 !important; max-height: 20mm !important; font-size: 10pt !important; line-height: 1.2 !important; }
+      .print-client-ice { margin: 0 !important; font-size: 10pt !important; line-height: 1.15 !important; font-weight: 800 !important; white-space: nowrap !important; }
       .print-summary-grid { grid-template-columns: 1.15fr .75fr 1.1fr !important; gap: 1mm !important; height: 28mm !important; min-height: 28mm !important; max-height: 28mm !important; overflow: hidden !important; }
       .print-summary-grid > div { min-height: 28mm !important; height: 28mm !important; max-height: 28mm !important; padding: 1mm 2mm !important; border-color: #cbd5e1 !important; border-radius: 0 !important; gap: 0 !important; line-height: 1.05 !important; box-sizing: border-box !important; overflow: hidden !important; }
       .print-summary-grid span, .print-summary-grid strong, .print-summary-grid label { font-size: 7pt !important; line-height: 1.05 !important; margin: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; }
@@ -4008,6 +4106,8 @@ export default function App() {
       .print-card textarea { min-height: 18px !important; }
       .print-empty-row { display: table-row !important; height: 7.2mm !important; border-bottom: 1px solid #e2e8f0 !important; background: #fff !important; }
       .print-empty-row td { height: 7.2mm !important; padding: 0 !important; border: 1px solid #e2e8f0 !important; box-shadow: inset -0.5px 0 #f1f5f9, inset 0 -0.5px #f1f5f9 !important; background: #fff !important; }
+      .client-document-card .print-empty-row,
+      .client-document-card .print-empty-row td { height: 6.2mm !important; }
       .print-card table { font-size: 8pt !important; }
       .print-card table th { font-size: 7.5pt !important; line-height: 1.1 !important; white-space: normal !important; }
       .print-card table :is(input, textarea, span) { font-size: 8pt !important; line-height: 1.15 !important; }
@@ -4025,6 +4125,8 @@ export default function App() {
       .print-card tfoot { display: table-footer-group; }
       .client-document-table,
       .client-document-table table { border: 0 !important; box-shadow: none !important; }
+      .client-document-table,
+      .client-document-table .print-body-wrap { overflow: hidden !important; }
       .client-document-table table th,
       .client-document-table table td,
       .client-document-table .print-empty-row td { border-left: 0 !important; border-top: 0 !important; border-bottom: 0 !important; border-right: .3mm solid #94a3b8 !important; box-shadow: none !important; }
@@ -4088,17 +4190,6 @@ export default function App() {
       <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" style={{ display: 'none' }} />
       <input type="file" ref={brandInputRef} onChange={handleBrandLogoUpload} accept="image/*" style={{ display: 'none' }} />
       <Notification msg={notification.msg} type={notification.type} title={notification.title} action={notification.action} secondaryAction={notification.secondaryAction} onClose={closeNotify} />
-      {!serverSyncReady && (
-        <div role="status" className="no-print" style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 5000, padding: '10px 14px', borderRadius: 10, background: '#0f766e', color: '#fff', fontWeight: 700, boxShadow: '0 10px 30px rgba(15,23,42,.2)' }}>
-          Synchronisation Supabase…
-        </div>
-      )}
-      {serverSyncReady && realtimeStatus !== 'subscribed' && realtimeStatus !== 'idle' && (
-        <div className="no-print" style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 4999, padding: '7px 11px', borderRadius: 9, background: '#fff7ed', color: '#9a3412', border: '1px solid #fdba74', fontWeight: 700 }}>
-          Reconnexion temps réel…
-        </div>
-      )}
-
       {/* HEADER */}
       <div className="no-print fleetparts-topbar" style={{ background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(226,232,240,0.7)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 20, gap: 12 }}>
         <div className="fleetparts-topbar-context" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -4292,20 +4383,39 @@ export default function App() {
                         <button type="button" onClick={() => { markCompanyDirty('is_logo'); setCompanyLogo(null); }} className="no-print admin-delete-action" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: 4, fontSize: 'inherit', padding: '2px 6px', cursor: 'pointer', fontWeight: 700, marginTop: 3 }}>{t.deleteLogo}</button>
                       )}
                     </div>
-                    <div className="print-company-details" style={{ flex: 1 }}>
+                    <div className="print-company-details" style={{ flex: usesClientPrintLayout ? '1.35 1 0%' : 1, minWidth: usesClientPrintLayout ? 420 : 0 }}>
                       <input value={companyName} onChange={e => { markCompanyDirty('is_company_name'); setCompanyName(e.target.value); }} placeholder={t.companyPlaceholder}
                         style={{ ...S.input, fontSize: usesClientPrintLayout ? 36 : 30, fontWeight: 900, color: usesClientPrintLayout ? '#000' : theme.btn, marginBottom: 7 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyAddress} onChange={e => { markCompanyDirty('is_company_address'); setCompanyAddress(e.target.value); }} placeholder={t.addressPlaceholder}
-                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 18 : 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 14 : 14, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyPhone} onChange={e => { markCompanyDirty('is_company_phone'); setCompanyPhone(e.target.value); }} placeholder={t.phonePlaceholder}
-                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 18 : 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 14 : 14, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
                       <input value={companyEmail} onChange={e => { markCompanyDirty('is_company_email'); setCompanyEmail(e.target.value); }} placeholder="Email..."
-                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 18 : 16, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
+                        style={{ ...S.input, fontSize: usesClientPrintLayout ? 14 : 14, color: '#475569', marginBottom: 3 }} readOnly={!companyEditMode || isLocked} />
                     </div>
                   </div>
                   {usesClientPrintLayout ? (
-                    <div className="print-client-box print-activity-box" style={{ width: 390, minHeight: 120, display: 'grid', placeItems: 'center', padding: '10px 14px', textAlign: 'center' }}>
-                      <strong style={{ fontSize: 32, lineHeight: 1.12, fontWeight: 900, fontStyle: 'italic', color: '#111827', width: '100%', wordBreak: 'break-word' }}>{COMPANY_ACTIVITY_LINE}</strong>
+                    <div className="print-client-box print-activity-box" style={{ width: 420, minHeight: 120, display: 'grid', placeItems: 'center', padding: '10px 8px', textAlign: 'center' }}>
+                      <strong style={{ fontSize: 32, lineHeight: 1.12, fontWeight: 900, fontStyle: 'italic', color: '#111827', width: '100%', wordBreak: 'break-word' }}>
+                        {companyEditMode && !isLocked ? (
+                          <textarea
+                            className="no-print company-activity-editor"
+                            value={companyActivity}
+                            onChange={event => {
+                              markCompanyDirty('is_company_activity');
+                              setCompanyActivity(event.target.value);
+                            }}
+                            maxLength={500}
+                            rows={4}
+                            aria-label="Activité de l’entreprise"
+                          />
+                        ) : (
+                          <span className="no-print">{companyActivity}</span>
+                        )}
+                        <span className="print-only print-activity-lines">
+                          <span>{companyActivity}</span>
+                        </span>
+                      </strong>
                     </div>
                   ) : (
                     <div className="print-client-box" style={{ border: '2px solid #cbd5e1', borderRadius: 6, padding: '14px 12px 10px', width: 390, minHeight: 120, background: '#f8fafc', position: 'relative' }}>
@@ -4355,24 +4465,24 @@ export default function App() {
                 {usesClientPrintLayout ? (
                   <div className="print-meta print-client-meta-row" style={{ display: 'grid', gridTemplateColumns: 'calc(17% - 1.32px) minmax(0, 1fr)', border: '2px solid #94a3b8', borderRadius: 5, overflow: 'hidden', marginBottom: 5 }}>
                     <div className="print-date-box" style={{ padding: '7px 10px', borderRight: '2px solid #94a3b8', background: '#fff' }}>
-                      <span style={{ ...S.label, fontSize: 11, marginBottom: 2 }}>{t.dateDoc}</span>
+                      <span style={{ ...S.label, fontSize: 9, marginBottom: 2 }}>{t.dateDoc}</span>
                       <input type="date" value={documentDate} onChange={e => { if (!isLocked) setDocumentDate(e.target.value); }}
-                        style={{ ...S.input, fontSize: 12, fontWeight: 800, color: theme.btn, padding: '3px 0' }} readOnly={isLocked} />
+                        style={{ ...S.input, fontSize: 10, fontWeight: 800, color: theme.btn, padding: '3px 0' }} readOnly={isLocked} />
                       {documentType === 'AVOIR' && parentFactRef && (
                         <div style={{ marginTop: 4, fontSize: 10, fontWeight: 700, color: '#475569' }}>{t.factOrig}: {parentFactRef}</div>
                       )}
                     </div>
                     <div className="print-client-meta-box" style={{ padding: '7px 10px', background: '#fff', minWidth: 0 }}>
-                      <span className="print-only print-client-meta-label">Client</span>
+                      <span className="print-only print-client-meta-label">Client :</span>
                       <div className="no-print" style={{ marginBottom: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <span style={{ ...S.label, fontSize: 11, margin: 0, marginRight: 'auto' }}>Client</span>
-                        <button onClick={() => setShowClientModal(true)} style={{ ...S.btn(), fontSize: 10, padding: '3px 8px' }}>{t.chooseClient}</button>
+                        <span style={{ ...S.label, fontSize: 9, margin: 0, marginRight: 'auto' }}>Client :</span>
+                        <button onClick={() => setShowClientModal(true)} style={{ ...S.btn(), fontSize: 9, padding: '3px 8px' }}>{t.chooseClient}</button>
                         {clientDetails && <button onClick={() => { if (!isLocked) { setClientDetails(''); setClientICE(''); } }} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>✕</button>}
                       </div>
                       <textarea rows={3} value={clientDetails} onChange={e => { if (!isLocked) setClientDetails(e.target.value); }} placeholder={t.clientPlaceholder}
-                        style={{ ...S.input, resize: 'vertical', fontSize: 16, lineHeight: 1.4, minHeight: 58, fontWeight: 700 }} readOnly={isLocked} />
+                        style={{ ...S.input, resize: 'vertical', fontSize: 13, lineHeight: 1.3, minHeight: 58, fontWeight: 700 }} readOnly={isLocked} />
                       <div className="print-only print-client-details">{clientDetails || 'Client non renseigné'}</div>
-                      {clientICE && <div className="print-client-ice" style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{t.iceLabel}: <strong>{clientICE}</strong></div>}
+                      {clientICE && <div className="print-client-ice" style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>{t.iceLabel}: <strong>{clientICE}</strong></div>}
                     </div>
                   </div>
                 ) : (
