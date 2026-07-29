@@ -105,6 +105,10 @@ pnpm-debug.log*
 secrets/
 private/
 backups/
+*.sql
+!supabase/migrations/*.sql
+*.dump
+*.backup
 *.sqlite
 *.sqlite3
 *.db
