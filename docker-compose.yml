@@ -8,8 +8,10 @@ services:
       NODE_ENV: production
       PORT: 3001
       BACKUP_DIR: /app/backups
+      MESSAGE_PDF_DIR: /app/data/message-pdfs
       REDIS_URL: redis://redis:6379
-      REDIS_REQUIRED: "true"
+      REDIS_REQUIRED: "false"
+      REDIS_CHANNEL: intelspark:production:realtime:v1
       METRICS_ALLOW_UNAUTHENTICATED: "true"
     ports:
       - "127.0.0.1:3001:3001"
@@ -37,7 +39,7 @@ services:
         max-size: "10m"
         max-file: "5"
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/api/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

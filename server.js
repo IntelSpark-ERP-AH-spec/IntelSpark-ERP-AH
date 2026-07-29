@@ -411,6 +411,10 @@ app.post('/api/ai', csrfMiddlewareLegacy, authMw, (req, res, next) => {
 // ============================================================
 // Health endpoint
 // ============================================================
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
 app.get('/api/health', (req, res) => {
   const memory = process.memoryUsage();
   res.json({
