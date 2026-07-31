@@ -54,7 +54,19 @@ import {
   handleBlList,
   handleBlValidate,
 } from './warehouse';
-
+import {
+  handleExpeditionCreate,
+  handleExpeditionDelete,
+  handleExpeditionUpdate,
+  handleExpeditionsList,
+  handlePreparationCreate,
+  handlePreparationDelete,
+  handlePreparationUpdate,
+  handlePreparationsList,
+  handleReceptionCreate,
+  handleReceptionDelete,
+  handleReceptionsList,
+} from './warehouseOps';
 const HEALTH_PATH = '/api/health';
 
 async function databaseStatus(env: Env): Promise<'connected' | 'unavailable'> {
@@ -308,6 +320,60 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       const user = await requireAuth(request, env, cors);
       if (user instanceof Response) return user;
       return handleBlGetByNumero(env, user, blNumeroMatch[1], cors);
+    }
+
+    // Warehouse réceptions / préparations / expéditions (P4)
+    if (pathname === '/api/warehouse/receptions' && request.method === 'GET') {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      return handleReceptionsList(env, user, cors);
+    }
+    if (pathname === '/api/warehouse/receptions' && request.method === 'POST') {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      return handleReceptionCreate(request, env, user, cors);
+    }
+    const receptionMatch = pathname.match(/^\/api\/warehouse\/receptions\/([^/]+)$/);
+    if (receptionMatch && request.method === 'DELETE') {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      return handleReceptionDelete(env, user, decodeURIComponent(receptionMatch[1]), cors);
+    }
+    if (pathname === '/api/warehouse/preparations' && request.method === 'GET') {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      return handlePreparationsList(env, user, cors);
+    }
+    if (pathname === '/api/warehouse/preparations' && request.method === 'POST') {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      return handlePreparationCreate(request, env, user, cors);
+    }
+    const preparationMatch = pathname.match(/^\/api\/warehouse\/preparations\/([^/]+)$/);
+    if (preparationMatch) {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      const id = decodeURIComponent(preparationMatch[1]);
+      if (request.method === 'PUT') return handlePreparationUpdate(request, env, user, id, cors);
+      if (request.method === 'DELETE') return handlePreparationDelete(env, user, id, cors);
+    }
+    if (pathname === '/api/warehouse/expeditions' && request.method === 'GET') {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      return handleExpeditionsList(env, user, cors);
+    }
+    if (pathname === '/api/warehouse/expeditions' && request.method === 'POST') {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      return handleExpeditionCreate(request, env, user, cors);
+    }
+    const expeditionMatch = pathname.match(/^\/api\/warehouse\/expeditions\/([^/]+)$/);
+    if (expeditionMatch) {
+      const user = await requireAuth(request, env, cors);
+      if (user instanceof Response) return user;
+      const id = decodeURIComponent(expeditionMatch[1]);
+      if (request.method === 'PUT') return handleExpeditionUpdate(request, env, user, id, cors);
+      if (request.method === 'DELETE') return handleExpeditionDelete(env, user, id, cors);
     }
 
     return json({ error: 'Not found' }, 404, cors);

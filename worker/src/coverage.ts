@@ -50,6 +50,19 @@ export const FRONTEND_ROUTES = [
   { method: 'POST', path: '/api/warehouse/bons-livraison', priority: 'P2', feature: 'documents' },
   { method: 'GET', path: '/api/warehouse/bons-livraison/:numero', priority: 'P2', feature: 'documents' },
   { method: 'POST', path: '/api/warehouse/bons-livraison/:id/valider', priority: 'P2', feature: 'documents' },
+
+  // P4 — magasin opérations (réceptions / préparations / expéditions)
+  { method: 'GET', path: '/api/warehouse/receptions', priority: 'P4', feature: 'magasin' },
+  { method: 'POST', path: '/api/warehouse/receptions', priority: 'P4', feature: 'magasin' },
+  { method: 'DELETE', path: '/api/warehouse/receptions/:id', priority: 'P4', feature: 'magasin' },
+  { method: 'GET', path: '/api/warehouse/preparations', priority: 'P4', feature: 'magasin' },
+  { method: 'POST', path: '/api/warehouse/preparations', priority: 'P4', feature: 'magasin' },
+  { method: 'PUT', path: '/api/warehouse/preparations/:id', priority: 'P4', feature: 'magasin' },
+  { method: 'DELETE', path: '/api/warehouse/preparations/:id', priority: 'P4', feature: 'magasin' },
+  { method: 'GET', path: '/api/warehouse/expeditions', priority: 'P4', feature: 'magasin' },
+  { method: 'POST', path: '/api/warehouse/expeditions', priority: 'P4', feature: 'magasin' },
+  { method: 'PUT', path: '/api/warehouse/expeditions/:id', priority: 'P4', feature: 'magasin' },
+  { method: 'DELETE', path: '/api/warehouse/expeditions/:id', priority: 'P4', feature: 'magasin' },
 ];
 
 export const WORKER_ROUTES = [
@@ -96,6 +109,17 @@ export const WORKER_ROUTES = [
   { method: 'POST', path: '/api/warehouse/bons-livraison' },
   { method: 'GET', path: '/api/warehouse/bons-livraison/:numero' },
   { method: 'POST', path: '/api/warehouse/bons-livraison/:id/valider' },
+  { method: 'GET', path: '/api/warehouse/receptions' },
+  { method: 'POST', path: '/api/warehouse/receptions' },
+  { method: 'DELETE', path: '/api/warehouse/receptions/:id' },
+  { method: 'GET', path: '/api/warehouse/preparations' },
+  { method: 'POST', path: '/api/warehouse/preparations' },
+  { method: 'PUT', path: '/api/warehouse/preparations/:id' },
+  { method: 'DELETE', path: '/api/warehouse/preparations/:id' },
+  { method: 'GET', path: '/api/warehouse/expeditions' },
+  { method: 'POST', path: '/api/warehouse/expeditions' },
+  { method: 'PUT', path: '/api/warehouse/expeditions/:id' },
+  { method: 'DELETE', path: '/api/warehouse/expeditions/:id' },
 ];
 
 export function normalizePath(path: string): string {
