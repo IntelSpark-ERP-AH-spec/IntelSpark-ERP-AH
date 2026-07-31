@@ -1,4 +1,10 @@
-import { authenticateRequest, handleLogin, handleLogout, handleMe } from './auth';
+import {
+  handleChangePassword,
+  handleLogin,
+  handleLogout,
+  handleMe,
+  handleUpdateMe,
+} from './auth';
 import {
   handleDataContext,
   handleDataLoad,
@@ -7,6 +13,14 @@ import {
   handleDocPut,
 } from './data';
 import { corsHeaders, json, normalizedSupabaseUrl, supabaseHeaders } from './http';
+import { requireAdmin, requireAuth } from './middleware';
+import {
+  handleCreateUser,
+  handleDeleteUser,
+  handleListUsers,
+  handleResetPassword,
+  handleUpdateUser,
+} from './users';
 
 const HEALTH_PATH = '/api/health';
 
@@ -36,18 +50,6 @@ async function databaseStatus(env: Env): Promise<'connected' | 'unavailable'> {
   }
 }
 
-function withCors(response: Response, cors: HeadersInit): Response {
-  const headers = new Headers(response.headers);
-  for (const [key, value] of Object.entries(cors)) headers.set(key, String(value));
-  return new Response(response.body, { status: response.status, headers });
-}
-
-async function requireUser(request: Request, env: Env, cors: HeadersInit) {
-  const auth = await authenticateRequest(request, env);
-  if (auth instanceof Response) return withCors(auth, cors);
-  return auth;
-}
-
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
   const cors = corsHeaders(request, env);
   if (cors === null) {
@@ -75,35 +77,71 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
       );
     }
 
+    // --- Auth (parity with backend/routes/auth.js; SMTP stays on Express) ---
     if (pathname === '/api/auth/login' && request.method === 'POST') {
       return handleLogin(request, env, cors);
     }
     if (pathname === '/api/auth/me' && request.method === 'GET') {
       return handleMe(request, env, cors);
     }
+    if (pathname === '/api/auth/me' && request.method === 'PUT') {
+      return handleUpdateMe(request, env, cors);
+    }
+    if (pathname === '/api/auth/password' && request.method === 'PUT') {
+      return handleChangePassword(request, env, cors);
+    }
     if (pathname === '/api/auth/logout' && request.method === 'POST') {
       return handleLogout(request, env, cors);
     }
 
+    // --- Users (admin only; parity with backend/routes/users.js) ---
+    if (pathname === '/api/users' && request.method === 'GET') {
+      const admin = await requireAdmin(request, env, cors);
+      if (admin instanceof Response) return admin;
+      return handleListUsers(env, admin, cors);
+    }
+    if (pathname === '/api/users' && request.method === 'POST') {
+      const admin = await requireAdmin(request, env, cors);
+      if (admin instanceof Response) return admin;
+      return handleCreateUser(request, env, admin, cors);
+    }
+
+    const resetMatch = pathname.match(/^\/api\/users\/([^/]+)\/reset-password$/);
+    if (resetMatch && request.method === 'POST') {
+      const admin = await requireAdmin(request, env, cors);
+      if (admin instanceof Response) return admin;
+      return handleResetPassword(env, admin, decodeURIComponent(resetMatch[1]), cors);
+    }
+
+    const userMatch = pathname.match(/^\/api\/users\/([^/]+)$/);
+    if (userMatch) {
+      const admin = await requireAdmin(request, env, cors);
+      if (admin instanceof Response) return admin;
+      const userId = decodeURIComponent(userMatch[1]);
+      if (request.method === 'PUT') return handleUpdateUser(request, env, admin, userId, cors);
+      if (request.method === 'DELETE') return handleDeleteUser(env, admin, userId, cors);
+    }
+
+    // --- Data (supporting; SPA still on Express until cutover) ---
     if (pathname === '/api/data/context' && request.method === 'GET') {
-      const user = await requireUser(request, env, cors);
+      const user = await requireAuth(request, env, cors);
       if (user instanceof Response) return user;
       return handleDataContext(env, user, cors);
     }
     if (pathname === '/api/data/load' && request.method === 'GET') {
-      const user = await requireUser(request, env, cors);
+      const user = await requireAuth(request, env, cors);
       if (user instanceof Response) return user;
       return handleDataLoad(env, user, cors);
     }
     if (pathname === '/api/data/save' && request.method === 'POST') {
-      const user = await requireUser(request, env, cors);
+      const user = await requireAuth(request, env, cors);
       if (user instanceof Response) return user;
       return handleDataSave(request, env, user, cors);
     }
 
     const docMatch = pathname.match(/^\/api\/data\/doc\/([a-zA-Z0-9_]{1,50})$/);
     if (docMatch) {
-      const user = await requireUser(request, env, cors);
+      const user = await requireAuth(request, env, cors);
       if (user instanceof Response) return user;
       if (request.method === 'GET') return handleDocGet(env, user, docMatch[1], cors);
       if (request.method === 'PUT') return handleDocPut(request, env, user, docMatch[1], cors);

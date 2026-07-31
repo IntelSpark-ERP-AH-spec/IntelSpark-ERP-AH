@@ -10,6 +10,7 @@ import {
   roleDeniedResponse,
   sameOrganization,
 } from './permissions';
+import { validatePassword } from './validation';
 
 const JWT_ISSUER = 'intelsheets';
 const JWT_AUDIENCE = 'intelsheets-web';
@@ -85,7 +86,22 @@ async function findUserById(env: Env, id: string): Promise<AuthUser | null> {
   };
 }
 
-async function patchUser(env: Env, id: string, patch: Record<string, unknown>): Promise<boolean> {
+export async function findUserByIdWithPassword(env: Env, id: string): Promise<AuthUser | null> {
+  const encoded = encodeURIComponent(id);
+  const result = await supabaseRest<Array<AuthUser & { password?: string }>>(
+    env,
+    `users?id=eq.${encoded}&select=id,username,password,role,department,organization_id,full_name,email,active,token_version&limit=1`,
+  );
+  if (!result.ok || !Array.isArray(result.data) || !result.data[0]) return null;
+  const row = result.data[0];
+  return {
+    ...row,
+    organization_id: row.organization_id || 'org_default',
+    permissions: getRolePermissions(row.role),
+  };
+}
+
+export async function patchUser(env: Env, id: string, patch: Record<string, unknown>): Promise<boolean> {
   const result = await supabaseRest(env, `users?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: {
@@ -105,7 +121,7 @@ async function isBlacklisted(env: Env, jti: string): Promise<boolean> {
   return Boolean(result.ok && Array.isArray(result.data) && result.data.length);
 }
 
-async function blacklistToken(env: Env, jti: string, expSeconds?: number): Promise<void> {
+export async function blacklistToken(env: Env, jti: string, expSeconds?: number): Promise<void> {
   const expiresAt = expSeconds
     ? new Date(expSeconds * 1000).toISOString()
     : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -274,6 +290,12 @@ export async function handleLogin(request: Request, env: Env, cors: HeadersInit)
   const token = await generateToken(env, user);
   const headers = new Headers(cors);
   headers.append('Set-Cookie', 'token=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None');
+  console.info(JSON.stringify({
+    event: 'audit_action',
+    action: 'auth.login',
+    actor_id: user.id,
+    organization_id: user.organization_id,
+  }));
   return json({ token, user: publicUser(user) }, 200, headers);
 }
 
@@ -295,5 +317,99 @@ export async function handleLogout(request: Request, env: Env, cors: HeadersInit
     return new Response(auth.body, { status: auth.status, headers });
   }
   if (auth.jti) await blacklistToken(env, auth.jti, auth.exp);
+  console.info(JSON.stringify({
+    event: 'audit_action',
+    action: 'auth.logout',
+    actor_id: auth.id,
+    organization_id: auth.organization_id,
+  }));
+  return json({ success: true }, 200, cors);
+}
+
+/** Express PUT /api/auth/me — only full_name and email. */
+export async function handleUpdateMe(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  const auth = await authenticateRequest(request, env);
+  if (auth instanceof Response) {
+    const headers = new Headers(auth.headers);
+    for (const [key, value] of Object.entries(cors)) headers.set(key, String(value));
+    return new Response(auth.body, { status: auth.status, headers });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json() as Record<string, unknown>;
+  } catch {
+    return json({ error: 'Données invalides' }, 400, cors);
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return json({ error: 'Données invalides' }, 400, cors);
+  }
+
+  const forbidden = [
+    'role', 'organization_id', 'organization', 'active', 'permissions',
+    'password', 'username', 'id', 'token_version', 'admin',
+  ];
+  const attemptedForbidden = forbidden.filter((key) => Object.prototype.hasOwnProperty.call(body, key));
+  if (attemptedForbidden.length) {
+    return json({ error: 'Champ interdit' }, 403, cors);
+  }
+
+  const fullName = Object.prototype.hasOwnProperty.call(body, 'full_name')
+    ? (body.full_name == null ? null : String(body.full_name))
+    : auth.full_name;
+  const email = Object.prototype.hasOwnProperty.call(body, 'email')
+    ? (body.email == null ? null : String(body.email))
+    : auth.email;
+
+  const ok = await patchUser(env, auth.id, { full_name: fullName, email });
+  if (!ok) return json({ error: 'Erreur interne' }, 500, cors);
+  console.info(JSON.stringify({
+    event: 'audit_action',
+    action: 'auth.update_me',
+    actor_id: auth.id,
+    organization_id: auth.organization_id,
+  }));
+  return json({ success: true }, 200, cors);
+}
+
+/** Express PUT /api/auth/password — currentPassword + newPassword. */
+export async function handleChangePassword(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
+  const auth = await authenticateRequest(request, env);
+  if (auth instanceof Response) {
+    const headers = new Headers(auth.headers);
+    for (const [key, value] of Object.entries(cors)) headers.set(key, String(value));
+    return new Response(auth.body, { status: auth.status, headers });
+  }
+
+  let body: { currentPassword?: unknown; newPassword?: unknown };
+  try {
+    body = await request.json() as { currentPassword?: unknown; newPassword?: unknown };
+  } catch {
+    return json({ error: 'Données invalides' }, 400, cors);
+  }
+
+  const passwordError = validatePassword(body.newPassword);
+  if (passwordError) return json({ error: passwordError }, 400, cors);
+
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+  if (!currentPassword) return json({ error: 'Mot de passe actuel incorrect' }, 400, cors);
+
+  const user = await findUserByIdWithPassword(env, auth.id);
+  if (!user?.password) return json({ error: 'Compte indisponible' }, 401, cors);
+
+  const currentOk = await bcrypt.compare(currentPassword, user.password);
+  if (!currentOk) return json({ error: 'Mot de passe actuel incorrect' }, 400, cors);
+
+  const hash = await bcrypt.hash(String(body.newPassword), 12);
+  const nextVersion = Number(user.token_version || 0) + 1;
+  const ok = await patchUser(env, auth.id, { password: hash, token_version: nextVersion });
+  if (!ok) return json({ error: 'Erreur interne' }, 500, cors);
+  if (auth.jti) await blacklistToken(env, auth.jti, auth.exp);
+  console.info(JSON.stringify({
+    event: 'audit_action',
+    action: 'auth.change_password',
+    actor_id: auth.id,
+    organization_id: auth.organization_id,
+  }));
   return json({ success: true }, 200, cors);
 }
