@@ -4,8 +4,10 @@ import { subscribeOrganization } from './supabaseRealtime';
 
 const AuthContext = createContext(null);
 const DATA_CHUNK_BYTES = 3 * 1024 * 1024;
-const LOAD_RETRY_DELAY_MS = 150;
+const LOAD_RETRY_DELAY_MS = 80;
 const REALTIME_COALESCE_DELAY_MS = 60;
+const WRITE_ECHO_SUPPRESS_MS = 2_500;
+const DOC_FETCH_CONCURRENCY = 8;
 
 const wait = delay => new Promise(resolve => window.setTimeout(resolve, delay));
 
@@ -40,21 +42,32 @@ async function restoreLargeEntries(data) {
   const result = { ...(data || {}) };
   const manifest = result.is_brands;
   if (manifest?.__chunked && Number.isInteger(Number(manifest.count))) {
+    const count = Number(manifest.count);
     const brands = [];
-    for (let index = 0; index < Number(manifest.count); index += 1) {
-      const chunkKey = `is_brands_chunk_${index}`;
-      const response = await fetch(`/api/data/doc/${chunkKey}`, {
-        headers: { Authorization: `Bearer ${getAuthToken()}` },
-        credentials: 'same-origin',
-      });
-      if (response.ok) {
+    for (let start = 0; start < count; start += DOC_FETCH_CONCURRENCY) {
+      const slice = Array.from(
+        { length: Math.min(DOC_FETCH_CONCURRENCY, count - start) },
+        (_, offset) => start + offset,
+      );
+      const chunks = await Promise.all(slice.map(async (index) => {
+        const chunkKey = `is_brands_chunk_${index}`;
+        const response = await fetch(`/api/data/doc/${chunkKey}`, {
+          headers: { Authorization: `Bearer ${getAuthToken()}` },
+          credentials: 'same-origin',
+        });
+        if (!response.ok) return [];
         const chunk = await response.json();
-        if (Array.isArray(chunk)) brands.push(...chunk);
-      }
+        return Array.isArray(chunk) ? chunk : [];
+      }));
+      for (const chunk of chunks) brands.push(...chunk);
     }
     result.is_brands = brands;
   }
   return result;
+}
+
+function isRetryableError(error) {
+  return !error?.status || error.status === 408 || error.status === 429 || error.status >= 500;
 }
 
 export function AuthProvider({ children }) {
@@ -68,11 +81,52 @@ export function AuthProvider({ children }) {
   const deferredRealtimeRef = useRef(null);
   const loadRequestRef = useRef(null);
   const lastLoadedDataRef = useRef(null);
+  const recentWriteKeysRef = useRef(new Map());
+  const lastRealtimePayloadRef = useRef(null);
+
+  const markKeysWritten = useCallback((keys) => {
+    const now = Date.now();
+    for (const key of keys) recentWriteKeysRef.current.set(String(key), now);
+  }, []);
+
+  const shouldIgnoreRealtimeEcho = useCallback((payload = {}) => {
+    const now = Date.now();
+    for (const [key, writtenAt] of [...recentWriteKeysRef.current.entries()]) {
+      if (now - writtenAt > WRITE_ECHO_SUPPRESS_MS) recentWriteKeysRef.current.delete(key);
+    }
+    const keys = [
+      ...(Array.isArray(payload.keys) ? payload.keys : []),
+      payload?.key,
+    ].map(key => String(key || '')).filter(Boolean);
+
+    if (keys.length) {
+      let ignored = 0;
+      for (const key of keys) {
+        const writtenAt = recentWriteKeysRef.current.get(key);
+        if (writtenAt && now - writtenAt <= WRITE_ECHO_SUPPRESS_MS) {
+          recentWriteKeysRef.current.delete(key);
+          ignored += 1;
+        }
+      }
+      if (ignored > 0 && ignored === keys.length) return true;
+      return false;
+    }
+
+    if (payload?.entity === 'company_settings') {
+      for (const [key, writtenAt] of recentWriteKeysRef.current.entries()) {
+        if (!/^is_(company_|footer$|logo$|brands$)/.test(key)) continue;
+        if (now - writtenAt <= WRITE_ECHO_SUPPRESS_MS) return true;
+      }
+    }
+    return false;
+  }, []);
 
   const emitOrganizationChange = useCallback((payload = {}) => {
+    if (shouldIgnoreRealtimeEcho(payload)) return;
+    lastRealtimePayloadRef.current = payload;
     setRealtimeRevision(value => value + 1);
     window.dispatchEvent(new CustomEvent('organization:changed', { detail: payload }));
-  }, []);
+  }, [shouldIgnoreRealtimeEcho]);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -103,15 +157,33 @@ export function AuthProvider({ children }) {
       setOrganization(context);
       setSyncError(null);
       unsubscribe = subscribeOrganization(context.realtime_topic, payload => {
+        const nextPayload = payload || {};
         if (activeWritesRef.current > 0) {
-          deferredRealtimeRef.current = payload;
+          const previous = deferredRealtimeRef.current || {};
+          deferredRealtimeRef.current = {
+            ...nextPayload,
+            keys: [...new Set([
+              ...(Array.isArray(previous.keys) ? previous.keys : []),
+              previous.key,
+              nextPayload.key,
+            ].map(key => String(key || '')).filter(Boolean))],
+          };
           return;
         }
-        latestRealtimePayload = payload;
+        latestRealtimePayload = {
+          ...nextPayload,
+          keys: [...new Set([
+            ...(Array.isArray(latestRealtimePayload?.keys) ? latestRealtimePayload.keys : []),
+            ...(Array.isArray(nextPayload.keys) ? nextPayload.keys : []),
+            nextPayload.key,
+          ].map(key => String(key || '')).filter(Boolean))],
+        };
         if (realtimeTimer) window.clearTimeout(realtimeTimer);
         realtimeTimer = window.setTimeout(() => {
           realtimeTimer = null;
-          emitOrganizationChange(latestRealtimePayload || {});
+          const merged = latestRealtimePayload || {};
+          latestRealtimePayload = null;
+          emitOrganizationChange(merged);
         }, REALTIME_COALESCE_DELAY_MS);
       }, setRealtimeStatus);
     }).catch(error => {
@@ -145,26 +217,27 @@ export function AuthProvider({ children }) {
     activeWritesRef.current += 1;
     try {
       const entries = expandLargeEntries(data);
-      for (let index = 0; index < entries.length; index += 4) {
-        const batch = entries.slice(index, index + 4);
-        const results = await Promise.all(batch.map(async ([key, value]) => {
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            try {
-              await api.request(`/data/doc/${encodeURIComponent(key)}`, {
-                method: 'PUT', body: JSON.stringify(value),
-              });
-              return true;
-            } catch (error) {
-              const retryable = !error?.status || error.status === 408 || error.status === 429 || error.status >= 500;
-              if (!retryable || attempt === 1) return false;
-              await wait(LOAD_RETRY_DELAY_MS);
-            }
+      if (!entries.length) return true;
+      const payload = Object.fromEntries(entries);
+      markKeysWritten(Object.keys(payload));
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await api.request('/data/save', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          setSyncError(null);
+          return true;
+        } catch (error) {
+          if (!isRetryableError(error) || attempt === 1) {
+            setSyncError(error.message || 'Sauvegarde impossible');
+            return false;
           }
-          return false;
-        }));
-        if (results.some(result => !result)) return false;
+          await wait(LOAD_RETRY_DELAY_MS);
+        }
       }
-      return true;
+      return false;
     } catch (error) {
       setSyncError(error.message || 'Sauvegarde impossible');
       return false;
@@ -176,11 +249,12 @@ export function AuthProvider({ children }) {
         window.setTimeout(() => emitOrganizationChange(payload), 0);
       }
     }
-  }, [emitOrganizationChange]);
+  }, [emitOrganizationChange, markKeysWritten]);
 
   const saveCompanyData = useCallback(async (scope, data) => {
     activeWritesRef.current += 1;
     try {
+      markKeysWritten(Object.keys(data || {}));
       const result = await api.request(`/data/company-settings/${encodeURIComponent(scope)}`, {
         method: 'PUT',
         body: JSON.stringify(data),
@@ -198,7 +272,7 @@ export function AuthProvider({ children }) {
         window.setTimeout(() => emitOrganizationChange(payload), 0);
       }
     }
-  }, [emitOrganizationChange]);
+  }, [emitOrganizationChange, markKeysWritten]);
 
   const loadData = useCallback((options = {}) => {
     const background = options?.background === true;
@@ -214,8 +288,7 @@ export function AuthProvider({ children }) {
           return data;
         } catch (error) {
           lastError = error;
-          const retryable = !error?.status || error.status === 408 || error.status === 429 || error.status >= 500;
-          if (!retryable || attempt === 1) break;
+          if (!isRetryableError(error) || attempt === 1) break;
           await wait(LOAD_RETRY_DELAY_MS);
         }
       }
@@ -232,8 +305,31 @@ export function AuthProvider({ children }) {
     return loadRequestRef.current;
   }, []);
 
+  const loadDocsByKeys = useCallback(async (keys = []) => {
+    const uniqueKeys = [...new Set(keys.map(key => String(key || '')).filter(Boolean))];
+    if (!uniqueKeys.length) return null;
+    const result = {};
+    for (let start = 0; start < uniqueKeys.length; start += DOC_FETCH_CONCURRENCY) {
+      const slice = uniqueKeys.slice(start, start + DOC_FETCH_CONCURRENCY);
+      await Promise.all(slice.map(async (key) => {
+        try {
+          const value = await api.request(`/data/doc/${encodeURIComponent(key)}`);
+          result[key] = value;
+        } catch {
+          // Keep existing local value when a single key refresh fails.
+        }
+      }));
+    }
+    return result;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, hasRole, hasDept, saveData, saveCompanyData, loadData, organization, realtimeStatus, realtimeRevision, syncError }}>
+    <AuthContext.Provider value={{
+      user, login, logout, loading, hasRole, hasDept,
+      saveData, saveCompanyData, loadData, loadDocsByKeys,
+      organization, realtimeStatus, realtimeRevision, syncError,
+      lastRealtimePayloadRef,
+    }}>
       {children}
     </AuthContext.Provider>
   );

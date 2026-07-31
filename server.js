@@ -415,10 +415,38 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (_req, res) => {
   const memory = process.memoryUsage();
-  res.json({
-    status: 'ok',
+  let database = 'unavailable';
+  let redis = String(process.env.REDIS_URL || '').trim() ? 'unavailable' : 'not_configured';
+  let gmail = 'not_configured';
+
+  try {
+    const [{ dbGet }, { realtimeBusStatus }] = await Promise.all([
+      import('./backend/db.js'),
+      import('./backend/realtime-bus.js'),
+    ]);
+    database = Number(dbGet('SELECT 1 AS ok')?.ok) === 1 ? 'available' : 'unavailable';
+    const realtime = realtimeBusStatus();
+    if (String(process.env.REDIS_URL || '').trim()) {
+      redis = realtime.connected ? 'available' : 'unavailable';
+    }
+    const configuredGmail = dbGet(`SELECT COUNT(*) AS count
+      FROM email_accounts
+      WHERE is_active = 1
+        AND encrypted_app_password IS NOT NULL
+        AND encrypted_app_password != ''`);
+    gmail = Number(configuredGmail?.count || 0) > 0 ? 'configured' : 'not_configured';
+  } catch {
+    // Aucune information technique ou sensible ne doit sortir de ce point public.
+  }
+
+  res.status(database === 'available' ? 200 : 503).json({
+    status: database === 'available' ? 'ok' : 'degraded',
+    server: 'available',
+    database,
+    redis,
+    gmail,
     time: new Date().toISOString(),
     version: '2.0.0',
     uptime: process.uptime(),
@@ -580,7 +608,7 @@ async function startServer() {
   if (!isDev && !useDirectTls) {
     server = configureHttpServer(http.createServer(app));
     server.once('error', (error) => handleServerListenError(error, PORT));
-    server.listen(PORT, () => console.log(`HTTP interne production actif: ${PORT}`));
+    server.listen(PORT, '0.0.0.0', () => console.log(`HTTP interne production actif: ${PORT}`));
   } else if (!isDev) {
     auxiliaryServer = configureHttpServer(http.createServer((req, res) => {
       const host = req.headers.host?.replace(/:\d+$/, '') || 'localhost';

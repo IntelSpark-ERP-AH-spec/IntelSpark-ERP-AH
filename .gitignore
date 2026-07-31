@@ -68,6 +68,10 @@ node_modules/
 # Production secrets
 .env.production
 !.env.production.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
 
 # Runtime state
 data/*.db

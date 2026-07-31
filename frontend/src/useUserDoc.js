@@ -72,7 +72,8 @@ export function useUserDoc(key, initial) {
     const reload = async (event) => {
       const change = event?.detail || {};
       if (change.entity && change.entity !== 'organization_documents') return;
-      if (change.key && change.key !== keyRef.current) return;
+      if (change.key && change.key !== keyRef.current
+        && !(Array.isArray(change.keys) && change.keys.includes(keyRef.current))) return;
       if (savingRef.current) {
         deferredReloadRef.current = true;
         return;
@@ -147,7 +148,7 @@ export function useUserDoc(key, initial) {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       persist(data, keyRef.current);
-    }, 250);
+    }, 80);
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);

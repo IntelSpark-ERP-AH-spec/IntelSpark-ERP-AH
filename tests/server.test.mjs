@@ -850,6 +850,14 @@ test('production server supports one hundred authenticated users', { timeout: 60
 
     const health = await fetch(`${baseUrl}/api/health`);
     const healthBody = await health.json();
+    assert.equal(health.status, 200);
+    assert.equal(healthBody.status, 'ok');
+    assert.equal(healthBody.server, 'available');
+    assert.equal(healthBody.database, 'available');
+    assert.equal(healthBody.redis, 'not_configured');
+    assert.equal(healthBody.gmail, 'not_configured');
+    assert.equal('DATABASE_URL' in healthBody, false);
+    assert.equal('REDIS_URL' in healthBody, false);
     assert.equal(healthBody.target_concurrent_users, 100);
     assert.equal(healthBody.websocket_connections >= 100, true);
 

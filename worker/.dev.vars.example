@@ -1,0 +1,4 @@
+SUPABASE_URL=https://project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=replace-locally
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5900,https://erp.example.com
+JWT_SECRET=replace-with-same-secret-as-express-backend

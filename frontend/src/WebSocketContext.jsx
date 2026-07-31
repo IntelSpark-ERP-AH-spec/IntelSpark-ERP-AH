@@ -18,9 +18,14 @@ export function WSProvider({ children }) {
     tokenRef.current = token;
     if (wsRef.current) wsRef.current.close();
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const ws = new WebSocket(`${protocol}//${host}/ws`);
+    const configuredWsUrl = String(import.meta.env.VITE_WS_URL || '').trim().replace(/\/+$/, '');
+    const configuredApiUrl = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+    const fallbackProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const fallbackUrl = `${fallbackProtocol}//${window.location.host}/ws`;
+    const apiDerivedUrl = configuredApiUrl
+      ? `${configuredApiUrl.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:')}/ws`
+      : fallbackUrl;
+    const ws = new WebSocket(configuredWsUrl || apiDerivedUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

@@ -2048,7 +2048,7 @@ const BulletinsPage = ({ t, language }) => {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const { user, loading, logout, saveData, saveCompanyData, loadData, hasRole, organization, realtimeRevision } = useAuth();
+  const { user, loading, logout, saveData, saveCompanyData, loadData, loadDocsByKeys, hasRole, organization, lastRealtimePayloadRef } = useAuth();
   const { connect, disconnect, onlineUsers, connected, lastNotification } = useWS();
   const i18n = useAppI18n();
   const canDelete = hasRole('admin');
@@ -3627,7 +3627,7 @@ export default function App() {
     companyAutosaveTimer.current = window.setTimeout(() => {
       companyAutosaveTimer.current = null;
       saveCompanySettings(scope, { silent: true });
-    }, 250 + retryDelay);
+    }, 80 + retryDelay);
     return () => {
       if (companyAutosaveTimer.current) window.clearTimeout(companyAutosaveTimer.current);
       companyAutosaveTimer.current = null;
@@ -3699,7 +3699,7 @@ export default function App() {
   }, [companySaving, saveCompanySettings]);
 
   useEffect(() => {
-    if (!user || !organization) {
+    if (!user) {
       mounted.current = false;
       setServerSyncReady(false);
       return undefined;
@@ -3715,7 +3715,7 @@ export default function App() {
       if (!serverData) {
         window.setTimeout(() => {
           if (!cancelled) setSyncBootstrapAttempt(value => value + 1);
-        }, 750);
+        }, 400);
         return;
       }
       if (serverData && user.role === 'admin') {
@@ -3758,12 +3758,66 @@ export default function App() {
       setServerSyncReady(true);
     })();
     return () => { cancelled = true; };
-  }, [user?.id, user?.role, organization?.id, syncBootstrapAttempt, loadData, saveData, applyServerData, uploadCompanyAsset]);
+  }, [user?.id, user?.role, syncBootstrapAttempt, loadData, saveData, applyServerData, uploadCompanyAsset]);
 
   useEffect(() => {
-    if (!serverSyncReady || !realtimeRevision || catalogDirtyRef.current) return;
-    loadData({ background: true }).then(applyServerData);
-  }, [realtimeRevision, serverSyncReady, loadData, applyServerData]);
+    if (!serverSyncReady) return undefined;
+    let cancelled = false;
+    let coalesceTimer = null;
+    const pendingKeys = new Set();
+    let needsFullReload = false;
+
+    const flushRealtimeRefresh = () => {
+      coalesceTimer = null;
+      if (cancelled || catalogDirtyRef.current) {
+        pendingKeys.clear();
+        needsFullReload = false;
+        return;
+      }
+      const keys = [...pendingKeys];
+      const fullReload = needsFullReload;
+      pendingKeys.clear();
+      needsFullReload = false;
+      if (!fullReload && keys.length > 0 && keys.length <= 12) {
+        loadDocsByKeys(keys).then((partial) => {
+          if (!cancelled && partial) applyServerData(partial);
+        });
+        return;
+      }
+      loadData({ background: true }).then((data) => {
+        if (!cancelled) applyServerData(data);
+      });
+    };
+
+    const onOrganizationChanged = (event) => {
+      const change = event?.detail || lastRealtimePayloadRef?.current || {};
+      if (change.entity === 'produits' || change.entity === 'stock_mouvements') return;
+      const changedKeys = [
+        ...(Array.isArray(change.keys) ? change.keys : []),
+        change.key,
+      ].map(key => String(key || '')).filter(Boolean);
+      if (change.deferred) {
+        needsFullReload = true;
+      } else if (changedKeys.length) {
+        for (const key of changedKeys) pendingKeys.add(key);
+      } else if (change.entity === 'company_settings') {
+        for (const key of COMPANY_SYNC_KEYS) pendingKeys.add(key);
+      } else if (change.entity && change.entity !== 'organization_documents') {
+        return;
+      } else {
+        needsFullReload = true;
+      }
+      if (coalesceTimer) window.clearTimeout(coalesceTimer);
+      coalesceTimer = window.setTimeout(flushRealtimeRefresh, 50);
+    };
+
+    window.addEventListener('organization:changed', onOrganizationChanged);
+    return () => {
+      cancelled = true;
+      if (coalesceTimer) window.clearTimeout(coalesceTimer);
+      window.removeEventListener('organization:changed', onOrganizationChanged);
+    };
+  }, [serverSyncReady, loadData, loadDocsByKeys, applyServerData, lastRealtimePayloadRef]);
 
   const syncToServer = useCallback(() => {
     const data = {
@@ -3815,7 +3869,7 @@ export default function App() {
   useEffect(() => {
     if (!serverSyncReady || !mounted.current) return;
     if (syncTimer.current) clearTimeout(syncTimer.current);
-    syncTimer.current = setTimeout(syncToServer, 300);
+    syncTimer.current = setTimeout(syncToServer, 100);
     return () => { if (syncTimer.current) clearTimeout(syncTimer.current); };
   }, [serverSyncReady, syncToServer]);
 
@@ -3835,7 +3889,7 @@ export default function App() {
       lastSyncedData.current.set('is_catalog', JSON.stringify(catalog));
       lastSyncedData.current.set('is_admin_shared_initialized', JSON.stringify(true));
     };
-    const saveTimer = window.setTimeout(persistCatalog, 150);
+    const saveTimer = window.setTimeout(persistCatalog, 80);
     return () => {
       cancelled = true;
       window.clearTimeout(saveTimer);

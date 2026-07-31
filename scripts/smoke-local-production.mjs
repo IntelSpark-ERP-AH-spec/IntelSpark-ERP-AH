@@ -1,20 +1,31 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { WebSocket } from 'ws';
 
 const baseUrl = String(process.env.SMOKE_BASE_URL || 'http://127.0.0.1:3001').replace(/\/+$/, '');
+const websocketOrigin = String(process.env.SMOKE_ORIGIN || 'http://localhost:5173').replace(/\/+$/, '');
 const adminUsername = String(process.env.SMOKE_ADMIN_USERNAME || 'admin');
 const adminPassword = String(process.env.SMOKE_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || '');
 if (!adminPassword) throw new Error('Mot de passe administrateur absent');
+let csrfToken = '';
 
 async function request(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
       ...(options.body && !Buffer.isBuffer(options.body) ? { 'content-type': 'application/json' } : {}),
+      ...(csrfToken ? {
+        cookie: `XSRF-TOKEN=${encodeURIComponent(csrfToken)}`,
+        ...(!['GET', 'HEAD', 'OPTIONS'].includes(method) ? { 'x-csrf-token': csrfToken } : {}),
+      } : {}),
       ...(options.headers || {}),
     },
   });
+  const csrfCookie = String(response.headers.get('set-cookie') || '').match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/i);
+  if (csrfCookie?.[1]) csrfToken = decodeURIComponent(csrfCookie[1]);
   const contentType = response.headers.get('content-type') || '';
   const body = contentType.includes('application/json') ? await response.json() : await response.arrayBuffer();
   return { response, body };
@@ -54,7 +65,7 @@ function waitForSocketMessage(socket, predicate, timeoutMs = 8_000) {
 
 async function authenticatedSocket(token) {
   const socketUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
-  const socket = new WebSocket(socketUrl, { origin: 'http://localhost:5173' });
+  const socket = new WebSocket(socketUrl, { origin: websocketOrigin });
   await new Promise((resolve, reject) => {
     socket.addEventListener('open', resolve, { once: true });
     socket.addEventListener('error', reject, { once: true });
@@ -70,6 +81,7 @@ let temporaryUserId = '';
 let temporaryToken = '';
 let socket;
 const checks = {};
+const diagnostics = {};
 
 try {
   const badLogin = await request('/api/auth/login', {
@@ -142,8 +154,21 @@ try {
   });
   if (pdf.response.status !== 200) throw new Error(`PDF refusé (${pdf.response.status})`);
   const downloaded = await request(`/api/messages/${pdf.body.id}/pdf`, { headers: authHeaders(adminToken) });
+  const downloadedPdf = Buffer.from(downloaded.body);
   checks.pdf_roundtrip = downloaded.response.status === 200
-    && Buffer.compare(Buffer.from(downloaded.body), pdfBytes) === 0;
+    && Buffer.compare(downloadedPdf, pdfBytes) === 0;
+  if (!checks.pdf_roundtrip) {
+    diagnostics.pdf_status = downloaded.response.status;
+    diagnostics.pdf_expected_bytes = pdfBytes.length;
+    diagnostics.pdf_received_bytes = downloadedPdf.length;
+    diagnostics.pdf_received_prefix = downloadedPdf.subarray(0, 5).toString('ascii');
+    diagnostics.pdf_record_has_file_id = Boolean(pdf.body?.doc_id);
+    diagnostics.pdf_configured_file_exists = Boolean(
+      process.env.MESSAGE_PDF_DIR
+      && pdf.body?.doc_id
+      && existsSync(path.join(process.env.MESSAGE_PDF_DIR, `${pdf.body.doc_id}.pdf`)),
+    );
+  }
   const deletedPdf = await request(`/api/messages/${pdf.body.id}`, {
     method: 'DELETE',
     headers: authHeaders(temporaryToken),
@@ -177,5 +202,5 @@ try {
 }
 
 const failed = Object.entries(checks).filter(([, passed]) => !passed).map(([name]) => name);
-console.log(JSON.stringify({ checks, failed }));
+console.log(JSON.stringify({ checks, diagnostics, failed }));
 if (failed.length) process.exitCode = 1;

@@ -301,7 +301,12 @@ router.post('/save', async (req, res) => {
         else if (!setCompanySetting(organization.id, key, value, req.user.id)) setOrganizationDocument(organization.id, req.user.id, key, value);
       }
     });
-    res.json({ success: true, scope: 'organization', organization_id: organization.id });
+    res.json({
+      success: true,
+      scope: 'organization',
+      organization_id: organization.id,
+      saved_keys: keys,
+    });
   } catch (e) {
     console.error('[user_data /save]', e);
     res.status(500).json({ error: e.message });

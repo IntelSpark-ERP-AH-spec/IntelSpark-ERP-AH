@@ -1,4 +1,5 @@
-const API = '/api';
+const API_ORIGIN = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+const API = `${API_ORIGIN}/api`;
 const TRANSIENT_SERVER_STATUSES = new Set([502, 503, 504]);
 const TRANSIENT_RETRY_DELAYS_MS = [700, 1_500, 3_000];
 
@@ -55,7 +56,9 @@ async function request(path, options = {}) {
   const fetchOptions = {
     ...options,
     headers,
-    credentials: 'same-origin',
+    // Cross-origin Cloudflare Worker API needs credentials for CORS cookies;
+    // same-origin local Vite proxy keeps cookies/session on one host.
+    credentials: API_ORIGIN ? 'include' : 'same-origin',
   };
   const res = await fetchWithRetry(`${API}${path}`, fetchOptions, method, path);
   const responseText = await res.text();
@@ -64,7 +67,10 @@ async function request(path, options = {}) {
     data = responseText ? JSON.parse(responseText) : {};
   } catch {
     if (!res.ok) {
-      throw new Error('Connexion momentanément indisponible. Réessayez dans quelques secondes.');
+      const unavailable = TRANSIENT_SERVER_STATUSES.has(res.status);
+      throw new Error(unavailable || res.status === 0
+        ? 'Connexion momentanément indisponible. Réessayez dans quelques secondes.'
+        : `Serveur inaccessible (HTTP ${res.status}). Vérifiez que l'API tourne.`);
     }
     throw new Error('Le serveur a renvoyé une réponse invalide.');
   }
@@ -75,10 +81,10 @@ async function request(path, options = {}) {
     }
     const unavailable = TRANSIENT_SERVER_STATUSES.has(res.status);
     const error = new Error(data.error || (res.status === 401
-      ? 'Session expirée'
+      ? (path === '/auth/login' ? 'Identifiants incorrects' : 'Session expirée')
       : unavailable
         ? 'Connexion momentanément indisponible. Réessayez dans quelques secondes.'
-        : 'Erreur serveur'));
+        : `Erreur serveur (HTTP ${res.status})`));
     error.code = data.code;
     error.status = res.status;
     throw error;

@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "intelspark-erp-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-29",
+  "secrets": {
+    "required": [
+      "SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "ALLOWED_ORIGINS",
+      "JWT_SECRET"
+    ]
+  },
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
