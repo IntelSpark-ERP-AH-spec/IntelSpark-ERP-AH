@@ -2,11 +2,26 @@
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+!.env.production.example
+
+# Worker local secrets / cache
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+worker/.wrangler/
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+server_*.txt
+server_*.log
 
 # Dépendances
 node_modules/
@@ -14,64 +29,33 @@ node_modules/
 # Build
 dist/
 dist-ssr
+build/
 coverage/
 
-# Security logs
-logs/
-
-# OS
+# OS / IDE
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
-
-# Auto-generated entries
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Build outputs
-dist/
-build/
-*.log
-
-# Environment files
-.env
-.env.*
-!.env.example
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS files
-.DS_Store
-Thumbs.db
+*.code-workspace
 
 # Temporary files
 *.tmp
 *.temp
 .cache/
+tmp/
 
-# Sensitive files (auto-detected)
-.env
-node_modules/
-
-# Production secrets
+# Production secrets and keys
 .env.production
-!.env.production.example
-.dev.vars
-.dev.vars.*
-!.dev.vars.example
-.wrangler/
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+private/
 
 # Runtime state
 data/*.db
@@ -80,35 +64,6 @@ data/*.db-wal
 backend/data/*.db
 backend/data/*.db-shm
 backend/data/*.db-wal
-backups/*.db
-backups/*.db-journal
-certs/
-backend/uploads/message-pdfs/
-uploads/
-
-# Codex attachments
-.codex-remote-attachments/
-
-# Local server output
-server_*.txt
-
-# Local analysis workspace
-code-review-graph/
-
-# Local user registry
-src/users.json
-
-# Local Netlify folder
-.netlify/
-
-# Additional local and sensitive files
-pnpm-debug.log*
-*.pem
-*.key
-*.p12
-*.pfx
-secrets/
-private/
 backups/
 *.sql
 !supabase/migrations/*.sql
@@ -117,6 +72,13 @@ backups/
 *.sqlite
 *.sqlite3
 *.db
-tmp/
-*.code-workspace
+certs/
+backend/uploads/message-pdfs/
+uploads/
+
+# Local tooling / attachments
+.codex-remote-attachments/
+code-review-graph/
+.netlify/
+src/users.json
 /test-projet-1.txt.bmp

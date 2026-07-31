@@ -1,23 +1,21 @@
 import bcrypt from 'bcryptjs';
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, errors as JoseErrors } from 'jose';
 import { json, supabaseRest } from './http';
+import {
+  getRolePermissions,
+  hasPermission,
+  hasRole,
+  organizationDeniedResponse,
+  permissionDeniedResponse,
+  roleDeniedResponse,
+  sameOrganization,
+} from './permissions';
 
 const JWT_ISSUER = 'intelsheets';
 const JWT_AUDIENCE = 'intelsheets-web';
 const TOKEN_EXPIRY = '12h';
 const MAX_LOGIN_ATTEMPTS = 10;
 const LOCKOUT_DURATION_MS = 5 * 60 * 1000;
-
-const ROLE_PERMISSIONS: Record<string, string[]> = {
-  admin: ['*'],
-  commercial: ['clients:read', 'clients:write', 'stock:read', 'documents:read', 'documents:write', 'dashboard:read', 'ai:use'],
-  magasinier: ['stock:read', 'stock:write', 'warehouse:read', 'warehouse:write', 'stock:mouvements'],
-  rh: ['rh:read', 'rh:write', 'rh:paies', 'rh:candidatures', 'rh:formations'],
-  comptable: ['compta:read', 'compta:write', 'documents:read', 'clients:read'],
-  financier: ['compta:read', 'compta:write', 'reporting:read'],
-  technicien: ['atelier:read', 'atelier:write', 'vehicules:read', 'maintenance:read', 'maintenance:write'],
-  employe: ['dashboard:read', 'profile:read', 'profile:write'],
-};
 
 export type AuthUser = {
   id: string;
@@ -29,6 +27,9 @@ export type AuthUser = {
   email: string | null;
   active: number;
   token_version: number;
+  permissions: string[];
+  jti?: string;
+  exp?: number;
   password?: string;
   login_attempts?: number;
   locked_until?: string | null;
@@ -42,7 +43,7 @@ function jwtSecretKey(env: Env): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-function publicUser(user: AuthUser) {
+export function publicUser(user: AuthUser) {
   return {
     id: user.id,
     username: user.username,
@@ -56,12 +57,17 @@ function publicUser(user: AuthUser) {
 
 async function findUserByUsername(env: Env, username: string): Promise<AuthUser | null> {
   const encoded = encodeURIComponent(username);
-  const result = await supabaseRest<AuthUser[]>(
+  const result = await supabaseRest<Array<AuthUser & { password?: string }>>(
     env,
     `users?username=eq.${encoded}&select=id,username,password,role,department,organization_id,full_name,email,active,token_version,login_attempts,locked_until&limit=1`,
   );
   if (!result.ok || !Array.isArray(result.data) || !result.data[0]) return null;
-  return result.data[0];
+  const row = result.data[0];
+  return {
+    ...row,
+    organization_id: row.organization_id || 'org_default',
+    permissions: getRolePermissions(row.role),
+  };
 }
 
 async function findUserById(env: Env, id: string): Promise<AuthUser | null> {
@@ -71,7 +77,12 @@ async function findUserById(env: Env, id: string): Promise<AuthUser | null> {
     `users?id=eq.${encoded}&select=id,username,role,department,organization_id,full_name,email,active,token_version&limit=1`,
   );
   if (!result.ok || !Array.isArray(result.data) || !result.data[0]) return null;
-  return result.data[0];
+  const row = result.data[0];
+  return {
+    ...row,
+    organization_id: row.organization_id || 'org_default',
+    permissions: getRolePermissions(row.role),
+  };
 }
 
 async function patchUser(env: Env, id: string, patch: Record<string, unknown>): Promise<boolean> {
@@ -108,6 +119,28 @@ async function blacklistToken(env: Env, jti: string, expSeconds?: number): Promi
   });
 }
 
+async function isMaintenanceMode(env: Env): Promise<{ enabled: boolean; announcement: string }> {
+  const result = await supabaseRest<Array<{ key: string; value_json: string }>>(
+    env,
+    'runtime_config?key=in.(maintenance_mode,system_announcement)&select=key,value_json',
+  );
+  if (!result.ok || !Array.isArray(result.data)) return { enabled: false, announcement: '' };
+  const map = new Map(result.data.map((row) => [row.key, row.value_json]));
+  let enabled = false;
+  let announcement = '';
+  try {
+    enabled = JSON.parse(map.get('maintenance_mode') || 'false') === true;
+  } catch {
+    enabled = false;
+  }
+  try {
+    announcement = String(JSON.parse(map.get('system_announcement') || '""') || '');
+  } catch {
+    announcement = '';
+  }
+  return { enabled, announcement };
+}
+
 export async function generateToken(env: Env, user: AuthUser): Promise<string> {
   const jti = crypto.randomUUID().replace(/-/g, '');
   return new SignJWT({
@@ -117,7 +150,7 @@ export async function generateToken(env: Env, user: AuthUser): Promise<string> {
     role: user.role,
     department: user.department,
     organization_id: user.organization_id || 'org_default',
-    permissions: ROLE_PERMISSIONS[user.role] || ROLE_PERMISSIONS.employe,
+    permissions: getRolePermissions(user.role),
     tokenVersion: Number(user.token_version || 0),
   })
     .setProtectedHeader({ alg: 'HS256' })
@@ -148,12 +181,48 @@ export async function authenticateRequest(request: Request, env: Env): Promise<A
     const user = await findUserById(env, userId);
     if (!user || !user.active) return json({ error: 'Compte indisponible' }, 401);
     if (Number(payload.tokenVersion || 0) !== Number(user.token_version || 0)) {
-      return json({ error: 'Session expirée' }, 401);
+      return json({ error: 'Session révoquée' }, 401);
     }
-    return user;
-  } catch {
-    return json({ error: 'Session invalide' }, 401);
+
+    if (user.role !== 'admin') {
+      const maintenance = await isMaintenanceMode(env);
+      if (maintenance.enabled) {
+        return json({
+          error: 'Maintenance en cours',
+          announcement: maintenance.announcement,
+          code: 'MAINTENANCE_MODE',
+        }, 503);
+      }
+    }
+
+    return {
+      ...user,
+      jti,
+      exp: Number(payload.exp || 0) || undefined,
+      permissions: getRolePermissions(user.role),
+    };
+  } catch (error) {
+    if (error instanceof JoseErrors.JWTExpired) {
+      return json({ error: 'Session expirée', code: 'TOKEN_EXPIRED' }, 401);
+    }
+    return json({ error: 'Token invalide' }, 401);
   }
+}
+
+export function requireRole(user: AuthUser, ...roles: string[]): Response | null {
+  if (!hasRole(user, ...roles)) return json(roleDeniedResponse(), 403);
+  return null;
+}
+
+export function requirePermission(user: AuthUser, ...permissions: string[]): Response | null {
+  const allowed = permissions.some((permission) => hasPermission(user, permission));
+  if (!allowed) return json(permissionDeniedResponse(), 403);
+  return null;
+}
+
+export function requireOrganization(user: AuthUser, organizationId: string): Response | null {
+  if (!sameOrganization(user, organizationId)) return json(organizationDeniedResponse(), 403);
+  return null;
 }
 
 function isLocked(user: AuthUser): boolean {
@@ -219,20 +288,12 @@ export async function handleMe(request: Request, env: Env, cors: HeadersInit): P
 }
 
 export async function handleLogout(request: Request, env: Env, cors: HeadersInit): Promise<Response> {
-  const header = request.headers.get('Authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  if (token) {
-    try {
-      const verified = await jwtVerify(token, jwtSecretKey(env), {
-        issuer: JWT_ISSUER,
-        audience: JWT_AUDIENCE,
-        algorithms: ['HS256'],
-      });
-      const jti = String(verified.payload.jti || '');
-      if (jti) await blacklistToken(env, jti, Number(verified.payload.exp || 0) || undefined);
-    } catch {
-      // Ignore invalid tokens on logout.
-    }
+  const auth = await authenticateRequest(request, env);
+  if (auth instanceof Response) {
+    const headers = new Headers(auth.headers);
+    for (const [key, value] of Object.entries(cors)) headers.set(key, String(value));
+    return new Response(auth.body, { status: auth.status, headers });
   }
+  if (auth.jti) await blacklistToken(env, auth.jti, auth.exp);
   return json({ success: true }, 200, cors);
 }

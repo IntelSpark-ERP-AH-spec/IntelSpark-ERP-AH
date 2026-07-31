@@ -21,10 +21,14 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             frontend/package-lock.json
+            worker/package-lock.json
       - name: Installer serveur
         run: npm ci
       - name: Installer interface
         run: npm ci --prefix frontend
+      - name: Installer worker
+        working-directory: worker
+        run: npm ci
       - name: Compiler interface
         run: npm run build --prefix frontend
       - name: Tester securite
@@ -33,7 +37,19 @@ jobs:
         run: node --check server.js
       - name: Controler interface
         run: npm run lint --prefix frontend
+      - name: Tester worker
+        working-directory: worker
+        run: npm test
+      - name: Typecheck worker
+        working-directory: worker
+        run: npm run typecheck
+      - name: Dry-run deploy worker
+        working-directory: worker
+        run: npm run deploy:dry
       - name: Auditer serveur
         run: npm audit --omit=dev --audit-level=moderate
       - name: Auditer interface
         run: npm audit --prefix frontend --omit=dev --audit-level=moderate
+      - name: Auditer worker
+        working-directory: worker
+        run: npm audit --omit=dev --audit-level=moderate

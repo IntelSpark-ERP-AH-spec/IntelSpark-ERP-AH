@@ -1,5 +1,6 @@
 import type { AuthUser } from './auth';
 import { json, supabaseRest, type JsonValue } from './http';
+import { hasRole } from './permissions';
 
 const DEFAULT_ORGANIZATION_ID = 'org_default';
 const KEY_RE = /^[a-zA-Z0-9_]{1,50}$/;
@@ -226,7 +227,7 @@ export async function handleDataSave(
   }
   const keys = Object.keys(data);
   if (keys.length > 100) return json({ error: 'Trop de clés (max 100)' }, 400, cors);
-  if (user.role !== 'admin' && keys.some((key) => COMPANY_KEY_TO_COLUMN[key])) {
+  if (!hasRole(user, 'admin') && keys.some((key) => COMPANY_KEY_TO_COLUMN[key])) {
     return json({ error: 'Paramètres entreprise réservés à l’administrateur' }, 403, cors);
   }
   for (const [key, value] of Object.entries(data)) {
@@ -297,7 +298,7 @@ export async function handleDocPut(
   if (JSON.stringify(value).length > MAX_VALUE_BYTES) {
     return json({ error: 'Valeur trop grande' }, 400, cors);
   }
-  if (COMPANY_KEY_TO_COLUMN[key] && user.role !== 'admin') {
+  if (COMPANY_KEY_TO_COLUMN[key] && !hasRole(user, 'admin')) {
     return json({ error: 'Paramètres entreprise réservés à l’administrateur' }, 403, cors);
   }
   const organization = await getOrganization(env, user);
