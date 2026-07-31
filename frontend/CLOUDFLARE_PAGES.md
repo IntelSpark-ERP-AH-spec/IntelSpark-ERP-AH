@@ -19,7 +19,25 @@ Runtime (Pages Functions):
 
 - `API_UPSTREAM=https://intelspark-erp-api.intelspark-erp-ah.workers.dev`
 
-Worker secrets `ALLOWED_ORIGINS` must include the Pages preview URL (and Netlify URL).
+Worker secrets `ALLOWED_ORIGINS` must include exact Pages URLs (no wildcards):
+
+- `https://preview.intelspark-erp-web.pages.dev`
+- `https://intelspark-erp-web.pages.dev`
+- each deployment URL used for tests (example: `https://6fc1f28f.intelspark-erp-web.pages.dev`)
+- existing Netlify origin(s)
+
+Update with:
+
+```bash
+cd worker
+npx wrangler secret put ALLOWED_ORIGINS
+```
+
+Also set Pages project env:
+
+- Build: `VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
+- Functions: `API_UPSTREAM=https://intelspark-erp-api.intelspark-erp-ah.workers.dev`
+
 
 ## SPA fallback
 
