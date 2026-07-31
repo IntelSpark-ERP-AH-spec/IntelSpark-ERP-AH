@@ -1,5 +1,5 @@
 import type { AuthUser } from './auth';
-import { json, supabaseRest, type JsonValue } from './http';
+import { json, normalizedSupabaseUrl, supabaseRest, type JsonValue } from './http';
 import { hasRole } from './permissions';
 
 const DEFAULT_ORGANIZATION_ID = 'org_default';
@@ -170,11 +170,15 @@ async function setCompanySetting(
 
 export async function handleDataContext(env: Env, user: AuthUser, cors: HeadersInit): Promise<Response> {
   const organization = await getOrganization(env, user);
+  const remoteLogoUploadEnabled = String(env.SUPABASE_LOGO_UPLOAD_ENABLED || '').toLowerCase() === 'true';
+  const supabaseUrl = normalizedSupabaseUrl(env.SUPABASE_URL || '');
   return json({
     id: organization.id,
     name: organization.name,
     realtime_topic: organization.realtime_topic,
-    logo_upload_url: null,
+    logo_upload_url: remoteLogoUploadEnabled && supabaseUrl
+      ? `${supabaseUrl}/functions/v1/company-logo-upload`
+      : null,
   }, 200, cors);
 }
 
@@ -307,4 +311,145 @@ export async function handleDocPut(
     await setOrganizationDocument(env, organization.id, user.id, key, value);
   }
   return json({ success: true, scope: isUserPrivateDataKey(key) ? 'user' : 'organization' }, 200, cors);
+}
+
+export async function handleDocDelete(
+  env: Env,
+  user: AuthUser,
+  key: string,
+  cors: HeadersInit,
+): Promise<Response> {
+  if (!KEY_RE.test(key)) return json({ error: 'Clé invalide' }, 400, cors);
+  if (COMPANY_KEY_TO_COLUMN[key] && !hasRole(user, 'admin')) {
+    return json({ error: 'Paramètres entreprise réservés à l’administrateur' }, 403, cors);
+  }
+  const organization = await getOrganization(env, user);
+  if (isUserPrivateDataKey(key)) {
+    await supabaseRest(
+      env,
+      `user_documents?user_id=eq.${encodeURIComponent(user.id)}&key=eq.${encodeURIComponent(key)}`,
+      { method: 'DELETE' },
+    );
+  } else if (COMPANY_KEY_TO_COLUMN[key]) {
+    await setCompanySetting(env, organization.id, key, key === 'is_brands' ? [] : null, user.id);
+  } else {
+    await supabaseRest(
+      env,
+      `organization_documents?organization_id=eq.${encodeURIComponent(organization.id)}&key=eq.${encodeURIComponent(key)}`,
+      { method: 'DELETE' },
+    );
+  }
+  return json({ success: true }, 200, cors);
+}
+
+const COMPANY_SCOPE_KEYS: Record<string, string[]> = {
+  identity: [
+    'is_company_name', 'is_company_address', 'is_company_phone',
+    'is_company_email', 'is_company_activity', 'is_logo',
+  ],
+  branding: ['is_footer', 'is_brands'],
+  all: Object.keys(COMPANY_KEY_TO_COLUMN),
+};
+
+const COMPANY_TEXT_LIMITS: Record<string, number> = {
+  is_company_name: 200,
+  is_company_address: 500,
+  is_company_phone: 100,
+  is_company_email: 254,
+  is_company_activity: 500,
+  is_footer: 5000,
+};
+
+function companyAssetBaseUrl(env: Env): string {
+  const supabaseUrl = normalizedSupabaseUrl(env.SUPABASE_URL || '');
+  return supabaseUrl ? `${supabaseUrl}/storage/v1/object/public/company-assets/` : '';
+}
+
+function normalizeCompanyAssetUrl(env: Env, value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  const candidate = String(value).trim();
+  if (!candidate) throw new Error('URL image invalide');
+  if (candidate.startsWith('data:')) {
+    if (candidate.length > 1024 * 1024) throw new Error('Image trop volumineuse');
+    const match = candidate.match(/^data:image\/(png|jpeg|webp);base64,([a-zA-Z0-9+/]+={0,2})$/);
+    if (!match || match[2].length % 4 !== 0) throw new Error('Image locale invalide');
+    return candidate;
+  }
+  if (candidate.length > 2048) throw new Error('URL image invalide');
+  const base = companyAssetBaseUrl(env);
+  if (!base) throw new Error('SUPABASE_URL manquant');
+  if (!candidate.startsWith(base) && !candidate.startsWith('https://')) {
+    throw new Error('URL image hors stockage');
+  }
+  return candidate;
+}
+
+function normalizeCompanySettings(env: Env, scope: string, body: Record<string, unknown>) {
+  const keys = COMPANY_SCOPE_KEYS[scope];
+  if (!keys || !body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('Paramètres entreprise invalides');
+  }
+  const result: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    if (COMPANY_TEXT_LIMITS[key]) {
+      const text = String(body[key] ?? '').trim();
+      if (text.length > COMPANY_TEXT_LIMITS[key]) throw new Error(`Valeur trop longue: ${key}`);
+      result[key] = text;
+      continue;
+    }
+    if (key === 'is_logo') {
+      result[key] = normalizeCompanyAssetUrl(env, body[key]);
+      continue;
+    }
+    if (key === 'is_brands') {
+      if (!Array.isArray(body[key]) || body[key].length > 64) throw new Error('Liste des marques invalide');
+      result[key] = (body[key] as unknown[]).map((brand, index) => {
+        if (!brand || typeof brand !== 'object' || Array.isArray(brand)) throw new Error('Marque invalide');
+        const entry = brand as Record<string, unknown>;
+        const name = String(entry.name || '').trim().slice(0, 100);
+        return {
+          id: String(entry.id || `brand-${index + 1}`).slice(0, 100),
+          ...(name ? { name } : {}),
+          logo: normalizeCompanyAssetUrl(env, entry.logo),
+        };
+      });
+    }
+  }
+  if (!Object.keys(result).length) throw new Error('Aucune donnée entreprise reçue');
+  return result;
+}
+
+export async function handleCompanySettings(
+  request: Request,
+  env: Env,
+  user: AuthUser,
+  scopeParam: string,
+  cors: HeadersInit,
+): Promise<Response> {
+  if (!hasRole(user, 'admin')) {
+    return json({ error: 'Rôle non autorisé' }, 403, cors);
+  }
+  let body: Record<string, unknown>;
+  try { body = await request.json() as Record<string, unknown>; }
+  catch { return json({ error: 'Paramètres entreprise invalides' }, 400, cors); }
+
+  try {
+    const scope = String(scopeParam || '').toLowerCase();
+    const values = normalizeCompanySettings(env, scope, body);
+    const organization = await getOrganization(env, user);
+    for (const [key, value] of Object.entries(values)) {
+      await setCompanySetting(env, organization.id, key, value, user.id);
+    }
+    return json({
+      success: true,
+      scope,
+      organization_id: organization.id,
+      settings: await readCompanySettings(env, organization.id),
+    }, 200, cors);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Sauvegarde entreprise impossible';
+    const status = /invalide|trop longue|hors stockage|Aucune donnée|manquant/i.test(message) ? 400 : 500;
+    return json({ error: message }, status, cors);
+  }
 }

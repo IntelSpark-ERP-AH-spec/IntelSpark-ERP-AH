@@ -3,6 +3,15 @@ const API = `${API_ORIGIN}/api`;
 const TRANSIENT_SERVER_STATUSES = new Set([502, 503, 504]);
 const TRANSIENT_RETRY_DELAYS_MS = [700, 1_500, 3_000];
 
+/** Absolute or same-origin API root (no trailing slash). Prefer this for raw fetch calls. */
+export function getApiRoot() {
+  return API;
+}
+
+export function getApiOrigin() {
+  return API_ORIGIN;
+}
+
 function wait(delayMs) {
   return new Promise((resolve) => window.setTimeout(resolve, delayMs));
 }

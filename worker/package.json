@@ -8,6 +8,7 @@
     "types": "wrangler types",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "coverage:check": "vitest run src/coverage.test.ts",
     "check": "npm run types && npm run typecheck && npm test && npm run deploy:dry",
     "deploy:dry": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy"

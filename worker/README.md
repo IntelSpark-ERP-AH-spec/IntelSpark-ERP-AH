@@ -29,10 +29,17 @@ Windows `start.bat` is for local Express+Vite only. Never use it on Linux CI or 
 | Surface | Status |
 |---------|--------|
 | Express `server.js` | Kept; SPA / Netlify still use it when `VITE_API_URL` empty |
-| Worker auth + users | Migrated (this phase) |
-| Worker data | Partial (`/api/data/*`) |
-| Frontend Cloudflare Pages | Not deployed |
+| Worker auth + users + data + stock + fournisseurs + commandes + dashboard + BL | Migrated (P0–P2) |
+| Coverage gate | `npm run coverage:check` fails if P0/P1/P2 frontend routes missing |
+| Frontend Cloudflare Pages | Prepared (see `frontend/CLOUDFLARE_PAGES.md`) |
 | Netlify / DNS | Unchanged |
+
+## Route matrix (critical path)
+
+Commercial devis / BC / BL / factures / clients / catalog: persisted as `organization_documents` via `/api/data/*` (not separate REST).
+
+See `src/coverage.ts` for the authoritative frontend-used P0–P2 list.
+
 
 ## Route matrix
 

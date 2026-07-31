@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { api, setAuthToken, getAuthToken } from './api';
+import { api, setAuthToken, getAuthToken, getApiRoot } from './api';
 import { subscribeOrganization } from './supabaseRealtime';
 
 const AuthContext = createContext(null);
@@ -51,9 +51,9 @@ async function restoreLargeEntries(data) {
       );
       const chunks = await Promise.all(slice.map(async (index) => {
         const chunkKey = `is_brands_chunk_${index}`;
-        const response = await fetch(`/api/data/doc/${chunkKey}`, {
+        const response = await fetch(`${getApiRoot()}/data/doc/${chunkKey}`, {
           headers: { Authorization: `Bearer ${getAuthToken()}` },
-          credentials: 'same-origin',
+          credentials: getApiRoot().startsWith('http') ? 'include' : 'same-origin',
         });
         if (!response.ok) return [];
         const chunk = await response.json();

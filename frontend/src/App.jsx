@@ -1827,7 +1827,7 @@ const generateBulletinPDF = async (b, companyInfo) => {
   }
 };
 
-import { api, getAuthToken } from './api';
+import { api, getAuthToken, getApiRoot } from './api';
 
 // ============================================================
 // BULLETINS DE PAIE — COMPOSANT INTÉGRÉ
@@ -3324,10 +3324,13 @@ export default function App() {
     if (!prompt || isAiLoading) return;
     setIsAiLoading(true);
     try {
-      const response = await fetch('/api/ai', {
+      const response = await fetch(`${getApiRoot()}/ai`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
+        credentials: getApiRoot().startsWith('http') ? 'include' : 'same-origin',
         body: JSON.stringify({
           prompt,
           context: {

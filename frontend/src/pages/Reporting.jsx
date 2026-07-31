@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getApiRoot } from '../api';
 import { useAuth } from '../AuthContext';
 
 const money = value => `${Number(value || 0).toLocaleString('fr-MA', { maximumFractionDigits: 0 })} MAD`;
@@ -16,7 +17,10 @@ export default function ReportingPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/reporting/dashboard-complet', { credentials: 'same-origin' });
+      const response = await fetch(`${getApiRoot()}/reporting/dashboard-complet`, {
+        credentials: getApiRoot().startsWith('http') ? 'include' : 'same-origin',
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('auth_token') || ''}` },
+      });
       if (!response.ok) throw new Error('Chargement impossible');
       setData(await response.json());
     } catch (requestError) {

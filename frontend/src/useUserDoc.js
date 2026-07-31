@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { getAuthToken, getCsrfToken } from './api';
+import { getApiRoot, getAuthToken, getCsrfToken } from './api';
 
 function authHeaders(method = 'GET') {
   const headers = { Authorization: `Bearer ${getAuthToken()}` };
@@ -9,6 +9,10 @@ function authHeaders(method = 'GET') {
     if (csrf) headers['X-CSRF-Token'] = csrf;
   }
   return headers;
+}
+
+function apiCredentials() {
+  return getApiRoot().startsWith('http') ? 'include' : 'same-origin';
 }
 
 /**
@@ -46,8 +50,8 @@ export function useUserDoc(key, initial) {
     }
     (async () => {
       try {
-        const res = await fetch('/api/data/doc/' + encodeURIComponent(key), {
-          credentials: 'same-origin',
+        const res = await fetch(`${getApiRoot()}/data/doc/` + encodeURIComponent(key), {
+          credentials: apiCredentials(),
           headers: authHeaders('GET'),
         });
         if (cancelled) return;
@@ -89,8 +93,8 @@ export function useUserDoc(key, initial) {
       }
       if (!getAuthToken()) return;
       try {
-        const res = await fetch('/api/data/doc/' + encodeURIComponent(keyRef.current), {
-          credentials: 'same-origin', headers: authHeaders('GET'),
+        const res = await fetch(`${getApiRoot()}/data/doc/` + encodeURIComponent(keyRef.current), {
+          credentials: apiCredentials(), headers: authHeaders('GET'),
         });
         if (!cancelled && res.ok) {
           const stored = await res.json();
@@ -114,10 +118,10 @@ export function useUserDoc(key, initial) {
     setError(null);
     let persisted = false;
     try {
-      const res = await fetch('/api/data/doc/' + encodeURIComponent(keyName), {
+      const res = await fetch(`${getApiRoot()}/data/doc/` + encodeURIComponent(keyName), {
         method: 'PUT',
         headers: authHeaders('PUT'),
-        credentials: 'same-origin',
+        credentials: apiCredentials(),
         keepalive: true,
         body: JSON.stringify(value),
       });
@@ -161,10 +165,10 @@ export function useUserDoc(key, initial) {
 
   const remove = useCallback(async () => {
     try {
-      await fetch('/api/data/doc/' + encodeURIComponent(keyRef.current), {
+      await fetch(`${getApiRoot()}/data/doc/` + encodeURIComponent(keyRef.current), {
         method: 'DELETE',
         headers: authHeaders('DELETE'),
-        credentials: 'same-origin',
+        credentials: apiCredentials(),
       });
       setData(initial);
       lastSavedRef.current = JSON.stringify(initial);

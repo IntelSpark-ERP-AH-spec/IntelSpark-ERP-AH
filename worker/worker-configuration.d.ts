@@ -6,6 +6,7 @@ interface __BaseEnv_Env {
 	SUPABASE_SERVICE_ROLE_KEY: string;
 	ALLOWED_ORIGINS: string;
 	JWT_SECRET: string;
+	SUPABASE_LOGO_UPLOAD_ENABLED?: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
